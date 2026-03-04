@@ -1,3 +1,4 @@
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -6,16 +7,39 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
-  Settings as SettingsIcon,
   Server,
   Bell,
-  Shield,
   Link2,
   Globe,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 
 export default function Settings() {
+  const { toast } = useToast();
+
+  const { data: genieStatus } = useQuery<{ configured: boolean; connected: boolean; url: string | null }>({
+    queryKey: ["/api/genieacs/status"],
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/genieacs/sync");
+      return res.json();
+    },
+    onSuccess: (data: { message: string; synced: number }) => {
+      toast({ title: "Sincronização concluída", description: data.message });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro na sincronização", description: error.message, variant: "destructive" });
+    },
+  });
+
   return (
     <ScrollArea className="h-full">
       <div className="p-6 space-y-6">
@@ -29,26 +53,58 @@ export default function Settings() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-1">
                 <Server className="w-4 h-4 text-primary" />
-                Servidor ACS
+                GenieACS - Servidor ACS
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>URL do Servidor ACS</Label>
-                <Input defaultValue="https://acs.seudominio.com.br" data-testid="input-acs-url" />
+              <div className="p-3 rounded-md bg-muted/50 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Status da Conexão</p>
+                  {genieStatus?.connected ? (
+                    <Badge variant="default" className="bg-emerald-600 text-white border-emerald-700">
+                      <CheckCircle className="w-3 h-3 mr-1" /> Conectado
+                    </Badge>
+                  ) : genieStatus?.configured ? (
+                    <Badge variant="outline" className="border-red-500 text-red-500">
+                      <XCircle className="w-3 h-3 mr-1" /> Sem conexão
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-amber-500 text-amber-500">
+                      <XCircle className="w-3 h-3 mr-1" /> Não configurado
+                    </Badge>
+                  )}
+                </div>
+                {genieStatus?.url && (
+                  <span className="text-xs text-muted-foreground">{genieStatus.url}</span>
+                )}
               </div>
               <div className="space-y-2">
-                <Label>Porta CWMP</Label>
-                <Input defaultValue="7547" data-testid="input-cwmp-port" />
+                <Label>URL do Servidor ACS (CWMP)</Label>
+                <Input defaultValue="https://acs.seudominio.com.br:7547" data-testid="input-acs-url" />
+              </div>
+              <div className="space-y-2">
+                <Label>URL da NBI API</Label>
+                <Input defaultValue={genieStatus?.url || "http://localhost:7557"} data-testid="input-nbi-url" />
               </div>
               <div className="space-y-2">
                 <Label>Intervalo de Inform (segundos)</Label>
                 <Input defaultValue="300" type="number" data-testid="input-inform-interval" />
               </div>
               <Separator />
-              <Button variant="secondary" className="w-full" data-testid="button-save-acs">
-                Salvar Configurações ACS
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="secondary" className="flex-1" data-testid="button-save-acs">
+                  Salvar
+                </Button>
+                <Button
+                  variant="default"
+                  onClick={() => syncMutation.mutate()}
+                  disabled={syncMutation.isPending}
+                  data-testid="button-sync-genieacs"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-1 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+                  {syncMutation.isPending ? "Sincronizando..." : "Sincronizar Dispositivos"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -71,9 +127,16 @@ export default function Settings() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">Sincronização Automática</p>
-                  <p className="text-xs text-muted-foreground">Sincronizar dados periodicamente</p>
+                  <p className="text-xs text-muted-foreground">Vincular dispositivos a clientes automaticamente via PPPoE</p>
                 </div>
                 <Switch data-testid="switch-auto-sync" />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Auto-descoberta de Clientes</p>
+                  <p className="text-xs text-muted-foreground">Criar clientes a partir dos dados do Link Monitor</p>
+                </div>
+                <Switch data-testid="switch-auto-discover" />
               </div>
               <Separator />
               <Button variant="secondary" className="w-full" data-testid="button-save-linkmonitor">

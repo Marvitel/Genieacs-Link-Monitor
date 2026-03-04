@@ -1,14 +1,14 @@
 # NetControl ACS - Network Management System
 
 ## Overview
-NetControl ACS is a web-based network management system designed to replace Flashman. It provides device management, diagnostics, monitoring, and configuration for ISP customers, supporting ONT/ONU, MikroTik, Mesh routers, Ruijie, and other network devices.
+NetControl ACS is a web-based network management system designed to replace Flashman. Built on top of GenieACS, it provides device management, diagnostics, monitoring, and configuration for ISP customers. Supports ONT/ONU, MikroTik, Mesh routers, Ruijie, and other network devices.
 
 ## Architecture
 - **Frontend**: React + TypeScript + Vite + Shadcn UI + TailwindCSS
 - **Backend**: Express.js + TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
-- **Routing**: wouter (frontend), Express (backend)
-- **State**: TanStack React Query
+- **ACS Engine**: GenieACS (CWMP/TR-069)
+- **Deployment**: Docker Compose (production datacenter)
 
 ## Project Structure
 ```
@@ -28,14 +28,24 @@ client/src/
     diagnostics.tsx       - Network event logs
     presets.tsx            - Configuration presets
     topology.tsx          - Network topology view
-    settings.tsx          - System settings
+    settings.tsx          - System settings + GenieACS sync
+  hooks/
+    use-page-title.ts     - SEO page title management
 server/
   db.ts                   - Database connection
   storage.ts              - Data access layer (IStorage interface)
-  routes.ts               - API endpoints
+  routes.ts               - API endpoints (local + GenieACS proxy)
+  genieacs.ts             - GenieACS NBI API integration
   seed.ts                 - Seed data
 shared/
   schema.ts               - Drizzle schemas + types
+deploy/
+  docker-compose.yml      - Full stack deployment
+  Dockerfile              - NetControl panel container
+  nginx/nginx.conf        - Reverse proxy config
+  scripts/install.sh      - Installation script
+  scripts/update.sh       - Update script from GitHub
+  .env.example            - Environment variables template
 ```
 
 ## Database Tables
@@ -45,15 +55,31 @@ shared/
 - **device_logs** - Device event logs
 - **config_presets** - Configuration templates
 
-## Key Features
-- Dashboard with network availability charts and device stats
-- Device management with Flashman-compatible configs
-- Client management (residential + corporate)
-- Network diagnostics and event logging
-- Configuration presets/templates
-- Network topology visualization
-- Link Monitor integration settings
-- Dark/light theme support
+## API Endpoints
+### Local CRUD
+- `/api/clients` - Client management
+- `/api/devices` - Device management
+- `/api/device-logs` - Event logs
+- `/api/config-presets` - Config presets
+
+### GenieACS Integration
+- `/api/genieacs/status` - Connection status
+- `/api/genieacs/devices` - List GenieACS devices
+- `/api/genieacs/devices/:id/reboot` - Reboot via TR-069
+- `/api/genieacs/devices/:id/refresh` - Refresh parameters
+- `/api/genieacs/devices/:id/factory-reset` - Factory reset
+- `/api/genieacs/devices/:id/set-parameter` - Set TR-069 parameter
+- `/api/genieacs/sync` - Sync GenieACS devices to local DB
+
+## Deployment
+Production deployment uses Docker Compose with:
+- MongoDB (GenieACS database)
+- GenieACS CWMP (port 7547)
+- GenieACS NBI (port 7557)
+- GenieACS FS (port 7567)
+- PostgreSQL (NetControl database)
+- NetControl Panel (port 3000)
+- Nginx (reverse proxy, ports 80/443)
 
 ## Device Types Supported
 ONT/ONU, Router, Mesh, Switch, OLT
