@@ -244,8 +244,8 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     uptime: (get("InternetGatewayDevice.DeviceInfo.UpTime") ?? get("Device.DeviceInfo.UpTime") ?? 0) as number,
     ssid: (get("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID") ?? get("Device.WiFi.SSID.1.SSID") ?? "") as string,
     pppoeUser: (get("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username") ?? "") as string,
-    rxPower: get("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.RXPower") as number | null,
-    txPower: get("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TXPower") as number | null,
+    rxPower: (get("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.RXPower") ?? get("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.RXPower")) as number | null,
+    txPower: (get("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TXPower") ?? get("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TXPower")) as number | null,
     temperature: get("InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value") as number | null,
   };
 }

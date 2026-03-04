@@ -19,6 +19,7 @@ import {
   genieCheckConnectivity,
   GenieACSError,
 } from "./genieacs";
+import { setupGenieACS, getGenieACSSetupStatus } from "./genieacs-setup";
 
 function handleGenieError(error: unknown, res: import("express").Response) {
   if (error instanceof GenieACSError) {
@@ -163,14 +164,42 @@ export async function registerRoutes(
   app.get("/api/genieacs/status", async (_req, res) => {
     const configured = isGenieACSConfigured();
     let connected = false;
+    let setup = null;
     if (configured) {
       connected = await genieCheckConnectivity();
+      if (connected) {
+        try {
+          setup = await getGenieACSSetupStatus();
+        } catch {
+          setup = null;
+        }
+      }
     }
     res.json({
       configured,
       connected,
       url: process.env.GENIEACS_NBI_URL || null,
+      setup,
     });
+  });
+
+  app.post("/api/genieacs/setup", async (req, res) => {
+    try {
+      const informInterval = (req.body as { informInterval?: number })?.informInterval || 300;
+      const result = await setupGenieACS(informInterval);
+      res.json(result);
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.get("/api/genieacs/setup-status", async (_req, res) => {
+    try {
+      const status = await getGenieACSSetupStatus();
+      res.json(status);
+    } catch (error) {
+      handleGenieError(error, res);
+    }
   });
 
   app.get("/api/genieacs/devices", async (_req, res) => {

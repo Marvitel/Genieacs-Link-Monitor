@@ -28,14 +28,15 @@ client/src/
     diagnostics.tsx       - Network event logs
     presets.tsx            - Configuration presets
     topology.tsx          - Network topology view
-    settings.tsx          - System settings + GenieACS sync
+    settings.tsx          - System settings + GenieACS setup/sync
   hooks/
     use-page-title.ts     - SEO page title management
 server/
   db.ts                   - Database connection
   storage.ts              - Data access layer (IStorage interface)
   routes.ts               - API endpoints (local + GenieACS proxy)
-  genieacs.ts             - GenieACS NBI API integration
+  genieacs.ts             - GenieACS NBI API client
+  genieacs-setup.ts       - GenieACS auto-configuration (provisions + presets)
   seed.ts                 - Seed data
 shared/
   schema.ts               - Drizzle schemas + types
@@ -63,13 +64,33 @@ deploy/
 - `/api/config-presets` - Config presets
 
 ### GenieACS Integration
-- `/api/genieacs/status` - Connection status
+- `/api/genieacs/status` - Connection + setup status
+- `/api/genieacs/setup` - Auto-configure GenieACS (provisions + presets)
+- `/api/genieacs/setup-status` - Check what's installed
 - `/api/genieacs/devices` - List GenieACS devices
 - `/api/genieacs/devices/:id/reboot` - Reboot via TR-069
 - `/api/genieacs/devices/:id/refresh` - Refresh parameters
 - `/api/genieacs/devices/:id/factory-reset` - Factory reset
 - `/api/genieacs/devices/:id/set-parameter` - Set TR-069 parameter
 - `/api/genieacs/sync` - Sync GenieACS devices to local DB
+
+## GenieACS Auto-Setup
+The system creates these provisions and presets automatically via NBI API:
+
+### Provisions (7 scripts)
+- **netcontrol-inform** - Device info (firmware, uptime, serial, manufacturer)
+- **netcontrol-wan** - WAN IP/PPP connections (IP, MAC, PPPoE user, status)
+- **netcontrol-wifi** - Wi-Fi config (SSID, channel, encryption, clients)
+- **netcontrol-pon** - GPON optical signal (RX/TX power, temperature, voltage)
+- **netcontrol-lan** - LAN hosts and DHCP config
+- **netcontrol-diagnostics** - Ping, traceroute, speed diagnostics
+- **netcontrol-set-inform** - Sets periodic inform interval on CPE
+
+### Presets (4 rules)
+- **netcontrol-bootstrap** - Runs all provisions on first connect + sets inform interval
+- **netcontrol-periodic** - Runs core provisions on each periodic inform
+- **netcontrol-boot** - Runs all provisions on device boot
+- **netcontrol-value-change** - Runs WAN/PON on parameter changes
 
 ## Deployment
 Production deployment uses Docker Compose with:
