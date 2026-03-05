@@ -42,6 +42,49 @@ async function genieGet(path: string): Promise<unknown[]> {
 }
 
 const PROVISIONS: Record<string, string> = {
+  "default": `
+// Substituído: provision default otimizada para evitar too_many_commits
+// Não usar {path: now} com wildcards aqui - causa loop em sessões grandes
+const hourly = Date.now(3600000);
+
+declare("InternetGatewayDevice.DeviceInfo.HardwareVersion", {value: hourly});
+declare("InternetGatewayDevice.DeviceInfo.SoftwareVersion", {value: hourly});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.ExternalIPAddress", {value: hourly});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.ExternalIPAddress", {value: hourly});
+declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.SSID", {value: hourly});
+declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.KeyPassphrase", {value: 1});
+declare("InternetGatewayDevice.LANDevice.*.Hosts.Host.*.HostName", {value: hourly});
+declare("InternetGatewayDevice.LANDevice.*.Hosts.Host.*.IPAddress", {value: hourly});
+declare("InternetGatewayDevice.LANDevice.*.Hosts.Host.*.MACAddress", {value: hourly});
+
+// Device:2 (TR-181)
+declare("Device.DeviceInfo.HardwareVersion", {value: hourly});
+declare("Device.DeviceInfo.SoftwareVersion", {value: hourly});
+declare("Device.WiFi.SSID.*.SSID", {value: hourly});
+declare("Device.Hosts.Host.*.HostName", {value: hourly});
+declare("Device.Hosts.Host.*.IPAddress", {value: hourly});
+declare("Device.Hosts.Host.*.MACAddress", {value: hourly});
+`,
+
+  "inform": `
+// Configuração de autenticação e inform interval
+const username = declare("DeviceID.ID", {value: 1}).value[0];
+const password = Math.trunc(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
+const informInterval = 300;
+
+// TR-098
+declare("InternetGatewayDevice.ManagementServer.ConnectionRequestUsername", {value: 1}, {value: username});
+declare("InternetGatewayDevice.ManagementServer.ConnectionRequestPassword", {value: 1}, {value: password});
+declare("InternetGatewayDevice.ManagementServer.PeriodicInformEnable", {value: 1}, {value: true});
+declare("InternetGatewayDevice.ManagementServer.PeriodicInformInterval", {value: 1}, {value: informInterval});
+
+// TR-181
+declare("Device.ManagementServer.ConnectionRequestUsername", {value: 1}, {value: username});
+declare("Device.ManagementServer.ConnectionRequestPassword", {value: 1}, {value: password});
+declare("Device.ManagementServer.PeriodicInformEnable", {value: 1}, {value: true});
+declare("Device.ManagementServer.PeriodicInformInterval", {value: 1}, {value: informInterval});
+`,
+
   "netcontrol-inform": `
 const now = Date.now();
 
@@ -69,9 +112,10 @@ declare("Device.DeviceInfo.ProcessStatus.CPUUsage", {value: now});
 
   "netcontrol-wan": `
 const now = Date.now();
+const hourly = Date.now(3600000);
 
-// WAN IP Connection (TR-098) - descobrir todos os sub-objetos
-declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*", {path: now, value: now});
+// WAN IP Connection (TR-098) - descobrir sub-objetos 1x por hora
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*", {path: hourly, value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.ExternalIPAddress", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.MACAddress", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.ConnectionStatus", {value: now});
@@ -79,28 +123,26 @@ declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.DefaultGateway", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.DNSServers", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Name", {value: now});
-declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.NATEnabled", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Uptime", {value: now});
 
 // WAN PPP Connection (TR-098)
-declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*", {path: now, value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*", {path: hourly, value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Username", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.ExternalIPAddress", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.ConnectionStatus", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.MACAddress", {value: now});
-declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.SubnetMask", {value: now});
-declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.DefaultGateway", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.DNSServers", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Name", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Uptime", {value: now});
 
-// TR-181 (Device:2) IP interface
-declare("Device.IP.Interface.*", {path: now, value: now});
-declare("Device.PPP.Interface.*", {path: now, value: now});
+// TR-181 (Device:2) IP interface - descobrir 1x por hora
+declare("Device.IP.Interface.*", {path: hourly, value: now});
+declare("Device.PPP.Interface.*", {path: hourly, value: now});
 `,
 
   "netcontrol-wifi": `
 const now = Date.now();
+const hourly = Date.now(3600000);
 
 // Wi-Fi (TR-098)
 declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.SSID", {value: now});
@@ -108,69 +150,56 @@ declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.Channel", {value:
 declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.Enable", {value: now});
 declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.Standard", {value: now});
 declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.BeaconType", {value: now});
-declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.WPAEncryptionModes", {value: now});
-declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.TotalAssociations", {value: now});
-declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.KeyPassphrase", {path: now, value: 1});
-declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.PreSharedKey.1.KeyPassphrase", {path: now, value: 1});
+declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.KeyPassphrase", {value: 1});
+declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.PreSharedKey.1.KeyPassphrase", {value: 1});
 
 // Wi-Fi (TR-181 Device:2)
-declare("Device.WiFi.Radio.*", {value: now});
-declare("Device.WiFi.SSID.*", {value: now});
-declare("Device.WiFi.AccessPoint.*", {value: now});
-declare("Device.WiFi.AccessPoint.*.Security.KeyPassphrase", {path: now, value: 1});
-declare("Device.WiFi.AccessPoint.*.AssociatedDevice.*", {value: now});
+declare("Device.WiFi.Radio.*.Channel", {value: now});
+declare("Device.WiFi.Radio.*.Enable", {value: now});
+declare("Device.WiFi.SSID.*.SSID", {value: now});
+declare("Device.WiFi.SSID.*.Enable", {value: now});
+declare("Device.WiFi.AccessPoint.*.Security.KeyPassphrase", {value: 1});
 `,
 
   "netcontrol-pon": `
 const now = Date.now();
+const hourly = Date.now(3600000);
 
-// Descobrir tree de dados PON/GPON - path discovery com {path: now}
-// Isso força o GenieACS a fazer getParameterNames para cada path
+// Sinal óptico GPON - pedir valores diretos sem {path: now} excessivo
+// Cada fabricante tem um path diferente - pedimos todos, CPE ignora os que não existem
 
-// Intelbras (121AC, AX1800V, etc) - usa X_GponInterfaceConfig SEM índice
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.*", {path: now, value: now});
-
-// Intelbras - typo comum em firmwares mais antigos
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.*", {path: now, value: now});
-
-// ZTE (F6600P, etc)
-declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.*", {path: now, value: now});
-
-// Huawei (EG8145V5, etc) - usa X_HW_
-declare("InternetGatewayDevice.WANDevice.1.X_HW_GponInterfaceConfig.*", {path: now, value: now});
-
-// Datacom (DM985, etc)
-declare("InternetGatewayDevice.WANDevice.1.X_DATACOM_GponInterfaceConfig.*", {path: now, value: now});
-
-// TP-Link (XX530v, etc) - pode usar Device.Optical ou IGD
-declare("InternetGatewayDevice.WANDevice.1.X_TP_GponInterfaceConfig.*", {path: now, value: now});
-declare("Device.Optical.*", {path: now, value: now});
-declare("Device.Optical.Interface.*", {path: now, value: now});
-declare("Device.Optical.Interface.1.Stats.*", {path: now, value: now});
-
-// China Telecom paths
-declare("InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.*", {path: now, value: now});
-
-// Nokia / Alcatel-Lucent
-declare("InternetGatewayDevice.WANDevice.1.X_ALU_GponInterfaceConfig.*", {path: now, value: now});
-
-// Paths genéricos sem prefixo de fabricante
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.*", {path: now, value: now});
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.RXPower", {value: now});
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.TXPower", {value: now});
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.Temperature", {value: now});
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.Voltage", {value: now});
+// Variantes de path para RXPower/TXPower/Temperature/Voltage
+// SEM {path:} para evitar too_many_commits - apenas {value:} para pedir o valor
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.RXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.Temperature", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.Voltage", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.RXPower", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.TXPower", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.Temperature", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.Voltage", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.RXPower", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TXPower", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.RXPower", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.TXPower", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.Temperature", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.Voltage", {value: now});
+declare("InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.RXPower", {value: now});
+declare("InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.TXPower", {value: now});
+
+// Descoberta de tree PON por fabricante - apenas 1x por hora para evitar loop
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.*", {path: hourly, value: hourly});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.*", {path: hourly, value: hourly});
+declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.*", {path: hourly, value: hourly});
 
 // Temperatura do dispositivo
-declare("InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.*", {path: now, value: now});
+declare("InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value", {value: now});
 
-// Ethernet Interface Config para status das portas
-declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.*", {path: now, value: now});
-declare("Device.Ethernet.Interface.*", {path: now, value: now});
+// Ethernet Interface Config - sem wildcard {path:} para evitar loop
+declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Status", {value: now});
+declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.2.Status", {value: now});
+declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.3.Status", {value: now});
+declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.4.Status", {value: now});
 `,
 
   "netcontrol-lan": `
@@ -246,13 +275,13 @@ const PRESETS: Record<string, GeniePreset> = {
     channel: "netcontrol",
     events: { "0 BOOTSTRAP": true },
     configurations: [
+      { type: "provision", name: "inform" },
       { type: "provision", name: "netcontrol-inform" },
       { type: "provision", name: "netcontrol-wan" },
       { type: "provision", name: "netcontrol-wifi" },
       { type: "provision", name: "netcontrol-pon" },
       { type: "provision", name: "netcontrol-lan" },
       { type: "provision", name: "netcontrol-diagnostics" },
-      { type: "provision", name: "netcontrol-set-inform", args: { "0": "300" } },
     ],
   },
   "netcontrol-periodic": {
@@ -260,9 +289,8 @@ const PRESETS: Record<string, GeniePreset> = {
     channel: "netcontrol",
     events: { "2 PERIODIC": true },
     configurations: [
+      { type: "provision", name: "inform" },
       { type: "provision", name: "netcontrol-inform" },
-      { type: "provision", name: "netcontrol-wan" },
-      { type: "provision", name: "netcontrol-wifi" },
       { type: "provision", name: "netcontrol-pon" },
     ],
   },
@@ -271,6 +299,7 @@ const PRESETS: Record<string, GeniePreset> = {
     channel: "netcontrol",
     events: { "1 BOOT": true },
     configurations: [
+      { type: "provision", name: "inform" },
       { type: "provision", name: "netcontrol-inform" },
       { type: "provision", name: "netcontrol-wan" },
       { type: "provision", name: "netcontrol-wifi" },
@@ -279,16 +308,9 @@ const PRESETS: Record<string, GeniePreset> = {
       { type: "provision", name: "netcontrol-diagnostics" },
     ],
   },
-  "netcontrol-value-change": {
-    weight: 0,
-    channel: "netcontrol",
-    events: { "4 VALUE CHANGE": true },
-    configurations: [
-      { type: "provision", name: "netcontrol-wan" },
-      { type: "provision", name: "netcontrol-pon" },
-    ],
-  },
 };
+
+const PRESETS_TO_REMOVE = ["default", "inform", "bootstrap", "netcontrol-value-change"];
 
 export interface SetupResult {
   provisions: { name: string; success: boolean; error?: string }[];
@@ -304,8 +326,10 @@ export async function setupGenieACS(informInterval: number = 300): Promise<Setup
   };
 
   const updatedProvisions = { ...PROVISIONS };
-  updatedProvisions["netcontrol-set-inform"] = updatedProvisions["netcontrol-set-inform"]
-    .replace('args[0] || "300"', `args[0] || "${informInterval}"`);
+  if (updatedProvisions["netcontrol-set-inform"]) {
+    updatedProvisions["netcontrol-set-inform"] = updatedProvisions["netcontrol-set-inform"]
+      .replace('args[0] || "300"', `args[0] || "${informInterval}"`);
+  }
 
   for (const [name, script] of Object.entries(updatedProvisions)) {
     try {
@@ -317,13 +341,13 @@ export async function setupGenieACS(informInterval: number = 300): Promise<Setup
     }
   }
 
-  const updatedPresets = JSON.parse(JSON.stringify(PRESETS));
-  const bootstrapSetInform = updatedPresets["netcontrol-bootstrap"].configurations.find(
-    (c: { name: string }) => c.name === "netcontrol-set-inform"
-  );
-  if (bootstrapSetInform) {
-    bootstrapSetInform.args = { "0": String(informInterval) };
+  for (const name of PRESETS_TO_REMOVE) {
+    try {
+      await fetch(`${GENIEACS_NBI_URL}/presets/${name}`, { method: "DELETE" });
+    } catch (_) {}
   }
+
+  const updatedPresets = JSON.parse(JSON.stringify(PRESETS));
 
   for (const [name, preset] of Object.entries(updatedPresets)) {
     try {

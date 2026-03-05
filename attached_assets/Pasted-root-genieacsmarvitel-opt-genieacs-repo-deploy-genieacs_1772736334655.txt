@@ -1,0 +1,44 @@
+root@genieacsmarvitel:/opt/genieacs-repo/deploy/genieacs# ping 100.80.7.243
+PING 100.80.7.243 (100.80.7.243) 56(84) bytes of data.
+64 bytes from 100.80.7.243: icmp_seq=1 ttl=62 time=4.57 ms
+64 bytes from 100.80.7.243: icmp_seq=2 ttl=62 time=3.62 ms
+64 bytes from 100.80.7.243: icmp_seq=3 ttl=62 time=1.41 ms
+^C
+--- 100.80.7.243 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2004ms
+rtt min/avg/max/mdev = 1.413/3.199/4.566/1.320 ms
+root@genieacsmarvitel:/opt/genieacs-repo/deploy/genieacs# ping 100.80.10.18
+PING 100.80.10.18 (100.80.10.18) 56(84) bytes of data.
+64 bytes from 100.80.10.18: icmp_seq=1 ttl=62 time=3.96 ms
+64 bytes from 100.80.10.18: icmp_seq=2 ttl=62 time=1.83 ms
+64 bytes from 100.80.10.18: icmp_seq=3 ttl=62 time=3.76 ms
+64 bytes from 100.80.10.18: icmp_seq=4 ttl=62 time=1.82 ms
+^C
+--- 100.80.10.18 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+rtt min/avg/max/mdev = 1.824/2.844/3.962/1.019 ms
+root@genieacsmarvitel:/opt/genieacs-repo/deploy/genieacs# ping 172.26.130.145
+PING 172.26.130.145 (172.26.130.145) 56(84) bytes of data.
+64 bytes from 172.26.130.145: icmp_seq=1 ttl=61 time=3.96 ms
+64 bytes from 172.26.130.145: icmp_seq=2 ttl=61 time=3.93 ms
+^C
+--- 172.26.130.145 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+rtt min/avg/max/mdev = 3.928/3.942/3.956/0.014 ms
+root@genieacsmarvitel:/opt/genieacs-repo/deploy/genieacs# ping 172.26.18.250
+PING 172.26.18.250 (172.26.18.250) 56(84) bytes of data.
+64 bytes from 172.26.18.250: icmp_seq=1 ttl=62 time=3.53 ms
+64 bytes from 172.26.18.250: icmp_seq=2 ttl=62 time=5.33 ms
+^C
+--- 172.26.18.250 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 3.531/4.431/5.331/0.900 ms
+root@genieacsmarvitel:/opt/genieacs-repo/deploy/genieacs# ping 172.26.220.159
+PING 172.26.220.159 (172.26.220.159) 56(84) bytes of data.
+64 bytes from 172.26.220.159: icmp_seq=1 ttl=61 time=4.49 ms
+64 bytes from 172.26.220.159: icmp_seq=2 ttl=61 time=2.49 ms
+^C
+--- 172.26.220.159 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 2.494/3.491/4.489/0.997 ms
+root@genieacsmarvitel:/opt/genieacs-repo/deploy/genieacs# 

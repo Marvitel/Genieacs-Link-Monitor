@@ -85,19 +85,35 @@ deploy/
 ## GenieACS Auto-Setup
 The system creates these provisions and presets automatically via NBI API:
 
-### Provisions (7 scripts)
+### Provisions (9 scripts)
+- **default** - Optimized hourly refresh of basic params (HW/SW version, WAN IP, WiFi SSID, hosts). Replaces original default to avoid too_many_commits. Uses {value: hourly} NOT {path: now}
+- **inform** - Connection request auth (username=DeviceID, random password) + PeriodicInformEnable + PeriodicInformInterval=300s. No PeriodicInformTime (Datacom rejects it)
 - **netcontrol-inform** - Device info (firmware, uptime, serial, manufacturer, memory, CPU)
-- **netcontrol-wan** - WAN IP/PPP connections with full details (IP, MAC, PPPoE user, status, DNS, gateway, subnet, uptime, NAT)
-- **netcontrol-wifi** - Wi-Fi config (SSID, channel, encryption, clients, KeyPassphrase)
-- **netcontrol-pon** - GPON optical signal with dynamic path discovery ({path: now}) for all manufacturers (X_GponInterfaceConfig, GponInterfaceConfig, X_HW_, X_DATACOM_, X_TP_, X_ALU_, X_CT-COM_, Device.Optical). Also collects Ethernet port status
+- **netcontrol-wan** - WAN IP/PPP connections. Path discovery {path: hourly} to avoid loops. Values refreshed every inform
+- **netcontrol-wifi** - Wi-Fi config (SSID, channel, KeyPassphrase with {value: 1})
+- **netcontrol-pon** - GPON optical signal. Direct value requests for all known paths + hourly path discovery for 3 main prefixes only
 - **netcontrol-lan** - LAN hosts and DHCP config
 - **netcontrol-diagnostics** - Ping, traceroute, speed diagnostics
-- **netcontrol-set-inform** - Sets periodic inform interval on CPE
+- **netcontrol-set-inform** - Sets periodic inform interval on CPE (legacy, functionality now in inform provision)
+
+### Critical Design: Avoiding too_many_commits
+- All presets use SAME channel "netcontrol" to prevent multi-channel loops
+- Removed VALUE CHANGE preset (caused path discovery → value change → preset trigger → loop)
+- Path discovery uses {path: hourly} not {path: now} to limit getParameterNames calls
+- PON provision requests specific leaf values ({value: now}) for known paths instead of wildcard discovery
+- Removed standalone "default", "inform", "bootstrap" presets that conflicted with netcontrol presets
 
 ### PON Data Discovery
 The extractDeviceInfo uses a dual approach:
 1. Static paths: 13+ paths per metric (RX/TX/Temp/Voltage) covering all known manufacturer prefixes
 2. Dynamic scanner (findPonData): Recursively traverses the device tree looking for any key containing "gpon", "pon", or "optical" and extracts RXPower, TXPower, Temperature, Voltage values regardless of exact path
+
+### Known PON Path Variants
+- Intelbras: X_GponInterafceConfig (typo in firmware) - WANDevice.1
+- ZTE: X_ZTE-COM_GponInterfaceConfig + X_ZTE-COM_WANPONInterfaceConfig - WANDevice.2
+- TP-Link: Device.Optical + Device.X_TP_GPON
+- Huawei: X_HW_GponInterfaceConfig
+- Datacom: No PON signal data via TR-069 (only X_CT-COM_WANGponLinkConfig for link config)
 
 ### Live Device Info (extractLiveDeviceInfo)
 Full real-time device data from GenieACS:
@@ -116,11 +132,10 @@ Sends 4 groups of getParameterValues tasks to force full data refresh:
 - LANDevice + Hosts + Ethernet
 - Services
 
-### Presets (4 rules)
-- **netcontrol-bootstrap** - Runs all provisions on first connect + sets inform interval
-- **netcontrol-periodic** - Runs core provisions on each periodic inform
-- **netcontrol-boot** - Runs all provisions on device boot
-- **netcontrol-value-change** - Runs WAN/PON on parameter changes
+### Presets (3 rules - all channel "netcontrol")
+- **netcontrol-bootstrap** - BOOTSTRAP event: inform + all provisions (full data collection)
+- **netcontrol-periodic** - PERIODIC event: inform + netcontrol-inform + netcontrol-pon (lightweight)
+- **netcontrol-boot** - BOOT event: inform + all provisions (full data collection)
 
 ## GenieACS Deployment (deploy/genieacs/)
 Runs on dedicated server 191.52.255.46 via Docker Compose:
