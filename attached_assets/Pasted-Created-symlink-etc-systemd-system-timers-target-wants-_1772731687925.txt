@@ -1,0 +1,31 @@
+Created symlink /etc/systemd/system/timers.target.wants/certbot.timer → /lib/systemd/system/certbot.timer.
+A processar 'triggers' para man-db (2.11.2-2) ...
+[+] stop 1/1
+ ✔ Container genieacs-nginx Stopped                                                                                                                      6.7s
+Saving debug log to /var/log/letsencrypt/letsencrypt.log
+Account registered.
+Requesting a certificate for flashman.marvitel.com.br
+
+Successfully received certificate.
+Certificate is saved at: /etc/letsencrypt/live/flashman.marvitel.com.br/fullchain.pem
+Key is saved at:         /etc/letsencrypt/live/flashman.marvitel.com.br/privkey.pem
+This certificate expires on 2026-06-03.
+These files will be updated when the certificate renews.
+Certbot has set up a scheduled task to automatically renew this certificate in the background.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+If you like Certbot, please consider supporting our work by:
+ * Donating to ISRG / Let's Encrypt:   https://letsencrypt.org/donate
+ * Donating to EFF:                    https://eff.org/donate-le
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        "Mountpoint": "/var/lib/docker/volumes/genieacs_letsencrypt_data/_data",
+cp: 'nginx/cwmp.conf' e 'nginx/cwmp.conf' são o mesmo arquivo
+[+] up 7/7
+ ✔ Container genieacs-certbot Running                                                                                                                    0.0s
+ ✔ Container genieacs-mongodb Healthy                                                                                                                    0.6s
+ ✔ Container genieacs-ui      Running                                                                                                                    0.0s
+ ✔ Container genieacs-nbi     Running                                                                                                                    0.0s
+ ✔ Container genieacs-fs      Running                                                                                                                    0.0s
+ ✔ Container genieacs-cwmp    Running                                                                                                                    0.0s
+ ✔ Container genieacs-nginx   Started                                                                                                                    0.8s
+root@genieacsmarvitel:/opt/genieacs-repo/deploy/genieacs# 
