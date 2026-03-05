@@ -421,7 +421,14 @@ export default function DeviceDetail() {
       setWifiPassword(liveInfo.wifiPassword || "");
       setWifiSsid5g(liveInfo.ssid5g || "");
       setWifiPassword5g(liveInfo.wifiPassword5g || "");
-      setPppoeUser(liveInfo.pppoeUser || "");
+      const pppConns = (liveInfo.wanConnections || []).filter((w: WanConnection) => w.type === "PPPoE");
+      if (pppConns.length > 0) {
+        const first = pppConns[0];
+        setPppoeUser(first.username || liveInfo.pppoeUser || "");
+        setPppoeTarget(`${first.wanDeviceIndex}-${first.wcdIndex}-${first.connIndex}`);
+      } else {
+        setPppoeUser(liveInfo.pppoeUser || "");
+      }
     } else if (device) {
       setWifiSsid(device.ssid || "");
       setWifiPassword(device.wifiPassword || "");
@@ -827,26 +834,26 @@ export default function DeviceDetail() {
                     <CardTitle className="text-sm font-medium flex items-center gap-1"><Key className="w-4 h-4 text-primary" /> Configurar PPPoE</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {(() => {
-                      const pppConns = wanConnections.filter((w) => w.type === "PPPoE");
-                      return pppConns.length > 1 ? (
-                        <div className="space-y-1">
-                          <Label className="text-xs">Conexão PPPoE alvo</Label>
-                          <select
-                            className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
-                            data-testid="select-pppoe-target"
-                            value={pppoeTarget}
-                            onChange={(e) => setPppoeTarget(e.target.value)}
-                          >
-                            {pppConns.map((w) => (
-                              <option key={w.index} value={`${w.wanDeviceIndex}-${w.wcdIndex}-${w.connIndex}`}>
-                                {w.name || `WAN ${w.index}`} {w.serviceList ? `(${w.serviceList})` : ""} {w.vlanId ? `VLAN ${w.vlanId}` : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      ) : null;
-                    })()}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Interface</Label>
+                      <select
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
+                        data-testid="select-pppoe-target"
+                        value={pppoeTarget}
+                        onChange={(e) => {
+                          setPppoeTarget(e.target.value);
+                          const pppConns = wanConnections.filter((w) => w.type === "PPPoE");
+                          const selected = pppConns.find((w) => `${w.wanDeviceIndex}-${w.wcdIndex}-${w.connIndex}` === e.target.value);
+                          if (selected?.username) setPppoeUser(selected.username);
+                        }}
+                      >
+                        {wanConnections.filter((w) => w.type === "PPPoE").map((w) => (
+                          <option key={w.index} value={`${w.wanDeviceIndex}-${w.wcdIndex}-${w.connIndex}`}>
+                            {w.name || `WAN ${w.index}`} {w.vlanId ? `· VLAN ${w.vlanId}` : ""} {w.serviceList ? `· ${w.serviceList}` : ""} {w.ipAddress ? `· ${w.ipAddress}` : ""} {w.status === "Connected" ? "✓" : w.status === "Disconnected" ? "✗" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs">Usuário</Label>
@@ -863,10 +870,10 @@ export default function DeviceDetail() {
                         if (!pppoeUser || !pppoePass) { toast({ title: "Campos obrigatórios", variant: "destructive" }); return; }
                         const pppConns = wanConnections.filter((w) => w.type === "PPPoE");
                         let wd = 1, wcdI = 1, ci = 1;
-                        if (pppConns.length > 1 && pppoeTarget) {
+                        if (pppoeTarget) {
                           const parts = pppoeTarget.split("-").map(Number);
                           if (parts.length === 3 && parts.every(n => n >= 1)) { wd = parts[0]; wcdI = parts[1]; ci = parts[2]; }
-                        } else if (pppConns.length === 1) {
+                        } else if (pppConns.length >= 1) {
                           wd = pppConns[0].wanDeviceIndex || 1; wcdI = pppConns[0].wcdIndex || 1; ci = pppConns[0].connIndex || 1;
                         }
                         pppoeConfigMutation.mutate({ username: pppoeUser, password: pppoePass, wanDeviceIndex: wd, wcdIndex: wcdI, connIndex: ci });
