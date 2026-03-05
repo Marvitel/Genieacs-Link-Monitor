@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -72,21 +72,20 @@ export default function DeviceDetail() {
   const [wifiPassword5g, setWifiPassword5g] = useState("");
   const [pppoeUser, setPppoeUser] = useState("");
   const [pppoePass, setPppoePass] = useState("");
-  const [wifiFormInitialized, setWifiFormInitialized] = useState(false);
-
   const { data: device, isLoading } = useQuery<Device>({
     queryKey: ["/api/devices", params?.id],
     enabled: !!params?.id,
   });
 
-  if (device && !wifiFormInitialized) {
-    setWifiSsid(device.ssid || "");
-    setWifiPassword(device.wifiPassword || "");
-    setWifiSsid5g(device.ssid5g || "");
-    setWifiPassword5g(device.wifiPassword5g || "");
-    setPppoeUser(device.pppoeUser || "");
-    setWifiFormInitialized(true);
-  }
+  useEffect(() => {
+    if (device) {
+      setWifiSsid(device.ssid || "");
+      setWifiPassword(device.wifiPassword || "");
+      setWifiSsid5g(device.ssid5g || "");
+      setWifiPassword5g(device.wifiPassword5g || "");
+      setPppoeUser(device.pppoeUser || "");
+    }
+  }, [device?.id]);
 
   const { data: client } = useQuery<Client>({
     queryKey: ["/api/clients", device?.clientId],

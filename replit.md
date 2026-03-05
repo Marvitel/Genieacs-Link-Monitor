@@ -63,16 +63,24 @@ deploy/
 - `/api/device-logs` - Event logs
 - `/api/config-presets` - Config presets
 
-### GenieACS Integration
+### Device Actions (uses genieId from local DB)
+- `/api/devices/:id/reboot` - Reboot via GenieACS
+- `/api/devices/:id/refresh` - Refresh parameters via GenieACS
+- `/api/devices/:id/factory-reset` - Factory reset via GenieACS
+- `/api/devices/:id/diagnostic` - Run ping/traceroute via TR-069
+- `/api/devices/:id/diagnostic/:type` - Get diagnostic results
+- `/api/devices/:id/wifi-config` - Set WiFi SSID/password (2.4G + 5G)
+- `/api/devices/:id/pppoe-config` - Set PPPoE credentials
+- `/api/devices/:id/firmware-update` - Push firmware via TR-069
+- `/api/devices/:id/set-parameter` - Set any TR-069 parameter
+- `/api/devices/:id/parameters` - Read device parameters
+- `/api/devices/:id/tasks` - List pending GenieACS tasks
+
+### GenieACS Direct API
 - `/api/genieacs/status` - Connection + setup status
 - `/api/genieacs/setup` - Auto-configure GenieACS (provisions + presets)
-- `/api/genieacs/setup-status` - Check what's installed
 - `/api/genieacs/devices` - List GenieACS devices
-- `/api/genieacs/devices/:id/reboot` - Reboot via TR-069
-- `/api/genieacs/devices/:id/refresh` - Refresh parameters
-- `/api/genieacs/devices/:id/factory-reset` - Factory reset
-- `/api/genieacs/devices/:id/set-parameter` - Set TR-069 parameter
-- `/api/genieacs/sync` - Sync GenieACS devices to local DB
+- `/api/genieacs/sync` - Sync GenieACS devices to local DB (sets genieId)
 
 ## GenieACS Auto-Setup
 The system creates these provisions and presets automatically via NBI API:

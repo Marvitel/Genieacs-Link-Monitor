@@ -137,13 +137,12 @@ export async function registerRoutes(
   app.post("/api/devices/:id/reboot", async (req, res) => {
     const device = await storage.getDevice(req.params.id);
     if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS. Execute uma sincronização." });
 
-    if (device.genieId) {
-      try {
-        await genieRebootDevice(device.genieId);
-      } catch (error) {
-        return handleGenieError(error, res);
-      }
+    try {
+      await genieRebootDevice(device.genieId);
+    } catch (error) {
+      return handleGenieError(error, res);
     }
 
     await storage.createDeviceLog({
@@ -158,13 +157,12 @@ export async function registerRoutes(
   app.post("/api/devices/:id/factory-reset", async (req, res) => {
     const device = await storage.getDevice(req.params.id);
     if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS. Execute uma sincronização." });
 
-    if (device.genieId) {
-      try {
-        await genieFactoryReset(device.genieId);
-      } catch (error) {
-        return handleGenieError(error, res);
-      }
+    try {
+      await genieFactoryReset(device.genieId);
+    } catch (error) {
+      return handleGenieError(error, res);
     }
 
     await storage.createDeviceLog({
@@ -179,13 +177,12 @@ export async function registerRoutes(
   app.post("/api/devices/:id/refresh", async (req, res) => {
     const device = await storage.getDevice(req.params.id);
     if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS. Execute uma sincronização." });
 
-    if (device.genieId) {
-      try {
-        await genieRefreshDevice(device.genieId);
-      } catch (error) {
-        return handleGenieError(error, res);
-      }
+    try {
+      await genieRefreshDevice(device.genieId);
+    } catch (error) {
+      return handleGenieError(error, res);
     }
     res.json({ message: "Atualização solicitada" });
   });
@@ -235,27 +232,34 @@ export async function registerRoutes(
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
 
     const parameters: Array<[string, string | number | boolean]> = [];
+    const updates: Record<string, string | number> = {};
     const igd = "InternetGatewayDevice";
 
     if (parsed.data.ssid) {
       parameters.push([`${igd}.LANDevice.1.WLANConfiguration.1.SSID`, parsed.data.ssid]);
+      updates.ssid = parsed.data.ssid;
     }
     if (parsed.data.password) {
       parameters.push([`${igd}.LANDevice.1.WLANConfiguration.1.KeyPassphrase`, parsed.data.password]);
       parameters.push([`${igd}.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase`, parsed.data.password]);
+      updates.wifiPassword = parsed.data.password;
     }
     if (parsed.data.ssid5g) {
       parameters.push([`${igd}.LANDevice.1.WLANConfiguration.5.SSID`, parsed.data.ssid5g]);
+      updates.ssid5g = parsed.data.ssid5g;
     }
     if (parsed.data.password5g) {
       parameters.push([`${igd}.LANDevice.1.WLANConfiguration.5.KeyPassphrase`, parsed.data.password5g]);
       parameters.push([`${igd}.LANDevice.1.WLANConfiguration.5.PreSharedKey.1.KeyPassphrase`, parsed.data.password5g]);
+      updates.wifiPassword5g = parsed.data.password5g;
     }
     if (parsed.data.channel !== undefined) {
       parameters.push([`${igd}.LANDevice.1.WLANConfiguration.1.Channel`, parsed.data.channel]);
+      updates.wifiChannel = String(parsed.data.channel);
     }
     if (parsed.data.channel5g !== undefined) {
       parameters.push([`${igd}.LANDevice.1.WLANConfiguration.5.Channel`, parsed.data.channel5g]);
+      updates.wifiChannel5g = String(parsed.data.channel5g);
     }
 
     if (parameters.length === 0) {
@@ -264,12 +268,6 @@ export async function registerRoutes(
 
     try {
       await genieSetMultipleParameters(device.genieId, parameters);
-
-      const updates: Record<string, string | number> = {};
-      if (parsed.data.ssid) updates.ssid = parsed.data.ssid;
-      if (parsed.data.ssid5g) updates.ssid5g = parsed.data.ssid5g;
-      if (parsed.data.password) updates.wifiPassword = parsed.data.password;
-      if (parsed.data.password5g) updates.wifiPassword5g = parsed.data.password5g;
       await storage.updateDevice(device.id, updates);
 
       await storage.createDeviceLog({
