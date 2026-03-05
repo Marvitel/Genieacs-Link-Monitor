@@ -41,11 +41,15 @@ jobs:
             fi
 
             docker compose pull
-            docker compose up -d
+            docker compose up -d --remove-orphans
 
-            sleep 10
+            sleep 15
             echo "=== Status dos serviços ==="
             docker compose ps
             echo ""
             echo "=== Teste NBI ==="
             curl -s http://localhost:7557/devices | head -c 100 || echo "NBI não respondeu"
+            echo ""
+            echo "=== Teste CWMP (porta 7547) ==="
+            curl -s -o /dev/null -w "HTTP %{http_code}" http://localhost:7547 --max-time 5 || echo "CWMP não respondeu"
+            echo ""
