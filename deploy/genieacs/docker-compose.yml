@@ -107,6 +107,7 @@ services:
       - genieacs-cwmp
     ports:
       - "7547:7547"
+      - "7548:7548"
       - "80:80"
     volumes:
       - ./nginx/cwmp.conf:/etc/nginx/conf.d/default.conf
