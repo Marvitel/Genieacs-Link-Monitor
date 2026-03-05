@@ -313,23 +313,28 @@ export async function registerRoutes(
     const schema = z.object({
       username: z.string().min(1),
       password: z.string().min(1),
+      wanDeviceIndex: z.number().min(1).default(1),
+      wcdIndex: z.number().min(1).default(1),
+      connIndex: z.number().min(1).default(1),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
 
+    const { username, password, wanDeviceIndex, wcdIndex, connIndex } = parsed.data;
     const igd = "InternetGatewayDevice";
+    const pppBase = `${igd}.WANDevice.${wanDeviceIndex}.WANConnectionDevice.${wcdIndex}.WANPPPConnection.${connIndex}`;
     const parameters: Array<[string, string | number | boolean]> = [
-      [`${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username`, parsed.data.username],
-      [`${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Password`, parsed.data.password],
+      [`${pppBase}.Username`, username],
+      [`${pppBase}.Password`, password],
     ];
 
     try {
       await genieSetMultipleParameters(device.genieId, parameters);
-      await storage.updateDevice(device.id, { pppoeUser: parsed.data.username });
+      await storage.updateDevice(device.id, { pppoeUser: username });
       await storage.createDeviceLog({
         deviceId: device.id,
         eventType: "config-change",
-        message: `PPPoE atualizado: ${parsed.data.username}`,
+        message: `PPPoE atualizado: ${username} (WD${wanDeviceIndex}.WCD${wcdIndex}.PPP${connIndex})`,
         severity: "info",
       });
       res.json({ message: "Configuração PPPoE enviada" });

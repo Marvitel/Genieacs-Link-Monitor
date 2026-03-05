@@ -89,7 +89,7 @@ The system creates these provisions and presets automatically via NBI API:
 - **default** - Optimized hourly refresh of basic params (HW/SW version, WAN IP, WiFi SSID, hosts). Replaces original default to avoid too_many_commits. Uses {value: hourly} NOT {path: now}
 - **inform** - Connection request auth (username=DeviceID, random password) + PeriodicInformEnable + PeriodicInformInterval=300s. No PeriodicInformTime (Datacom rejects it)
 - **netcontrol-inform** - Device info (firmware, uptime, serial, manufacturer, memory, CPU)
-- **netcontrol-wan** - WAN IP/PPP connections. Path discovery {path: hourly} to avoid loops. Values refreshed every inform
+- **netcontrol-wan** - WAN IP/PPP connections with VLAN, ServiceList, ConnectionType, NATEnabled, Enable. Includes X_CT-COM_WANGponLinkConfig.VLANIDMark for VLAN detection. Multi-WANDevice support (1-4). Path discovery {path: hourly}
 - **netcontrol-wifi** - Wi-Fi config (SSID, channel, KeyPassphrase with {value: 1})
 - **netcontrol-pon** - GPON optical signal. Direct value requests for all known paths + hourly path discovery for 3 main prefixes only
 - **netcontrol-lan** - LAN hosts and DHCP config
@@ -121,7 +121,7 @@ The extractDeviceInfo uses a dual approach:
 Full real-time device data from GenieACS:
 - Connected hosts (up to 200, TR-098 + TR-181)
 - Ethernet ports (up to 8, status/speed/duplex)
-- WAN connections (PPPoE + IPoE, up to 10 WCDs x 4 connections each)
+- WAN connections (PPPoE + IPoE, up to 4 WANDevices x 10 WCDs x 4 connections each, with VLAN ID, ServiceList, ConnectionType, NATEnabled)
 - VoIP lines (up to 4)
 - LAN config (gateway IP, subnet, DHCP range)
 - WiFi enabled status (2.4G + 5G)

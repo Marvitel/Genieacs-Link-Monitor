@@ -665,6 +665,12 @@ export interface WanConnection {
   uptime: number;
   natEnabled: boolean;
   vlanId: string;
+  serviceList: string;
+  connectionType: string;
+  enabled: boolean;
+  wanDeviceIndex: number;
+  wcdIndex: number;
+  connIndex: number;
 }
 
 export interface VoipLine {
@@ -914,28 +920,43 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
   }
 
   const wanConnections: WanConnection[] = [];
-  for (let wcd = 1; wcd <= 10; wcd++) {
-    for (const connType of ["WANPPPConnection", "WANIPConnection"]) {
-      for (let ci = 1; ci <= 4; ci++) {
-        const wanBase = `${igd}.WANDevice.1.WANConnectionDevice.${wcd}.${connType}.${ci}`;
-        const ip = getVal(device, `${wanBase}.ExternalIPAddress`) as string | null;
-        const name = getVal(device, `${wanBase}.Name`) as string | null;
-        if (ip || name) {
-          wanConnections.push({
-            index: wanConnections.length + 1,
-            name: (name || `WAN ${wcd}`) as string,
-            type: connType === "WANPPPConnection" ? "PPPoE" : "IPoE/DHCP",
-            ipAddress: ip || "",
-            macAddress: (getVal(device, `${wanBase}.MACAddress`) as string) || "",
-            subnetMask: (getVal(device, `${wanBase}.SubnetMask`) as string) || "",
-            defaultGateway: (getVal(device, `${wanBase}.DefaultGateway`) as string) || "",
-            dnsServers: (getVal(device, `${wanBase}.DNSServers`) as string) || "",
-            status: (getVal(device, `${wanBase}.ConnectionStatus`) as string) || "",
-            username: connType === "WANPPPConnection" ? ((getVal(device, `${wanBase}.Username`) as string) || "") : "",
-            uptime: (getVal(device, `${wanBase}.Uptime`) as number) || 0,
-            natEnabled: getVal(device, `${wanBase}.NATEnabled`) === true || getVal(device, `${wanBase}.NATEnabled`) === 1 || getVal(device, `${wanBase}.NATEnabled`) === "1",
-            vlanId: String(getVal(device, `${wanBase}.X_VLAN_ID`) || getVal(device, `${wanBase}.X_CT-COM_WANConnectionDevice.VLANIDMark`) || ""),
-          });
+  for (let wd = 1; wd <= 4; wd++) {
+    for (let wcd = 1; wcd <= 10; wcd++) {
+      const wcdBase = `${igd}.WANDevice.${wd}.WANConnectionDevice.${wcd}`;
+      for (const connType of ["WANPPPConnection", "WANIPConnection"]) {
+        for (let ci = 1; ci <= 4; ci++) {
+          const wanBase = `${wcdBase}.${connType}.${ci}`;
+          const ip = getVal(device, `${wanBase}.ExternalIPAddress`) as string | null;
+          const name = getVal(device, `${wanBase}.Name`) as string | null;
+          const status = getVal(device, `${wanBase}.ConnectionStatus`) as string | null;
+          const enable = getVal(device, `${wanBase}.Enable`);
+          if (ip || name || status) {
+            const vlan = getVal(device, `${wcdBase}.X_CT-COM_WANGponLinkConfig.VLANIDMark`)
+              ?? getVal(device, `${wanBase}.X_VLAN_ID`)
+              ?? getVal(device, `${wcdBase}.WANEthernetLinkConfig.X_VLAN_ID`);
+            const serviceList = (getVal(device, `${wanBase}.X_CT-COM_ServiceList`) as string) || "";
+            wanConnections.push({
+              index: wanConnections.length + 1,
+              name: (name || `WAN ${wd}.${wcd}`) as string,
+              type: connType === "WANPPPConnection" ? "PPPoE" : "IPoE/DHCP",
+              ipAddress: ip || "",
+              macAddress: (getVal(device, `${wanBase}.MACAddress`) as string) || "",
+              subnetMask: (getVal(device, `${wanBase}.SubnetMask`) as string) || "",
+              defaultGateway: (getVal(device, `${wanBase}.DefaultGateway`) as string) || "",
+              dnsServers: (getVal(device, `${wanBase}.DNSServers`) as string) || "",
+              status: status || "",
+              username: connType === "WANPPPConnection" ? ((getVal(device, `${wanBase}.Username`) as string) || "") : "",
+              uptime: (getVal(device, `${wanBase}.Uptime`) as number) || 0,
+              natEnabled: (() => { const nat = getVal(device, `${wanBase}.NATEnabled`); return nat === true || nat === 1 || nat === "1" || nat === "true"; })(),
+              vlanId: vlan !== null && vlan !== undefined ? String(vlan) : "",
+              serviceList,
+              connectionType: (getVal(device, `${wanBase}.ConnectionType`) as string) || "",
+              enabled: enable === true || enable === 1 || enable === "1" || enable === "Enabled",
+              wanDeviceIndex: wd,
+              wcdIndex: wcd,
+              connIndex: ci,
+            });
+          }
         }
       }
     }
@@ -959,6 +980,12 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
           uptime: 0,
           natEnabled: false,
           vlanId: "",
+          serviceList: "",
+          connectionType: "",
+          enabled: true,
+          wanDeviceIndex: 0,
+          wcdIndex: 0,
+          connIndex: i,
         });
       }
     }

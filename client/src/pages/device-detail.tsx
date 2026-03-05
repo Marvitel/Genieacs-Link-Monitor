@@ -94,6 +94,12 @@ interface WanConnection {
   uptime: number;
   natEnabled: boolean;
   vlanId: string;
+  serviceList: string;
+  connectionType: string;
+  enabled: boolean;
+  wanDeviceIndex: number;
+  wcdIndex: number;
+  connIndex: number;
 }
 
 interface VoipLine {
@@ -396,6 +402,7 @@ export default function DeviceDetail() {
   const [wifiPassword5g, setWifiPassword5g] = useState("");
   const [pppoeUser, setPppoeUser] = useState("");
   const [pppoePass, setPppoePass] = useState("");
+  const [pppoeTarget, setPppoeTarget] = useState("");
 
   const { data: device, isLoading } = useQuery<Device>({
     queryKey: ["/api/devices", params?.id],
@@ -511,7 +518,7 @@ export default function DeviceDetail() {
   });
 
   const pppoeConfigMutation = useMutation({
-    mutationFn: async (data: { username: string; password: string }) => {
+    mutationFn: async (data: { username: string; password: string; wanDeviceIndex?: number; wcdIndex?: number; connIndex?: number }) => {
       const res = await apiRequest("POST", `/api/devices/${params?.id}/pppoe-config`, data);
       return res.json();
     },
@@ -779,25 +786,29 @@ export default function DeviceDetail() {
                       <div className="space-y-3">
                         {wanConnections.map((wan) => (
                           <div key={wan.index} className="p-3 rounded-lg border bg-muted/30 space-y-2" data-testid={`wan-conn-${wan.index}`}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-between flex-wrap gap-1">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <Network className="w-4 h-4 text-primary" />
-                                <span className="text-sm font-medium">{wan.name}</span>
+                                <span className="text-sm font-medium">{wan.name || `WAN ${wan.index}`}</span>
                                 <Badge variant="outline" className="text-[10px]">{wan.type}</Badge>
+                                {wan.serviceList && <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-400">{wan.serviceList}</Badge>}
+                                {wan.vlanId && <Badge variant="outline" className="text-[10px] border-yellow-500/50 text-yellow-400">VLAN {wan.vlanId}</Badge>}
                               </div>
-                              <Badge variant={wan.status === "Connected" || wan.status === "Up" ? "default" : "secondary"} className="text-[10px]">
-                                {wan.status || "N/A"}
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                {wan.natEnabled && <Badge variant="outline" className="text-[10px] border-green-500/50 text-green-400">NAT</Badge>}
+                                <Badge variant={wan.status === "Connected" || wan.status === "Up" ? "default" : "secondary"} className="text-[10px]">
+                                  {wan.status || "N/A"}
+                                </Badge>
+                              </div>
                             </div>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                              {wan.ipAddress && <div><span className="text-muted-foreground">IP: </span><span className="font-medium">{wan.ipAddress}</span></div>}
+                              {wan.ipAddress && wan.ipAddress !== "0.0.0.0" && <div><span className="text-muted-foreground">IP: </span><span className="font-medium">{wan.ipAddress}</span></div>}
                               {wan.macAddress && <div><span className="text-muted-foreground">MAC: </span><span className="font-medium">{wan.macAddress}</span></div>}
-                              {wan.subnetMask && <div><span className="text-muted-foreground">Máscara: </span><span className="font-medium">{wan.subnetMask}</span></div>}
-                              {wan.defaultGateway && <div><span className="text-muted-foreground">Gateway: </span><span className="font-medium">{wan.defaultGateway}</span></div>}
+                              {wan.subnetMask && wan.subnetMask !== "0.0.0.0" && <div><span className="text-muted-foreground">Máscara: </span><span className="font-medium">{wan.subnetMask}</span></div>}
+                              {wan.defaultGateway && wan.defaultGateway !== "0.0.0.0" && <div><span className="text-muted-foreground">Gateway: </span><span className="font-medium">{wan.defaultGateway}</span></div>}
                               {wan.dnsServers && <div className="col-span-2"><span className="text-muted-foreground">DNS: </span><span className="font-medium">{wan.dnsServers}</span></div>}
                               {wan.username && <div><span className="text-muted-foreground">PPPoE: </span><span className="font-medium">{wan.username}</span></div>}
-                              {wan.vlanId && <div><span className="text-muted-foreground">VLAN: </span><span className="font-medium">{wan.vlanId}</span></div>}
-                              {wan.natEnabled && <div><span className="text-muted-foreground">NAT: </span><span className="font-medium">Ativo</span></div>}
+                              {wan.connectionType && <div><span className="text-muted-foreground">Tipo: </span><span className="font-medium">{wan.connectionType}</span></div>}
                             </div>
                           </div>
                         ))}
@@ -816,6 +827,26 @@ export default function DeviceDetail() {
                     <CardTitle className="text-sm font-medium flex items-center gap-1"><Key className="w-4 h-4 text-primary" /> Configurar PPPoE</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    {(() => {
+                      const pppConns = wanConnections.filter((w) => w.type === "PPPoE");
+                      return pppConns.length > 1 ? (
+                        <div className="space-y-1">
+                          <Label className="text-xs">Conexão PPPoE alvo</Label>
+                          <select
+                            className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
+                            data-testid="select-pppoe-target"
+                            value={pppoeTarget}
+                            onChange={(e) => setPppoeTarget(e.target.value)}
+                          >
+                            {pppConns.map((w) => (
+                              <option key={w.index} value={`${w.wanDeviceIndex}-${w.wcdIndex}-${w.connIndex}`}>
+                                {w.name || `WAN ${w.index}`} {w.serviceList ? `(${w.serviceList})` : ""} {w.vlanId ? `VLAN ${w.vlanId}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : null;
+                    })()}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs">Usuário</Label>
@@ -830,7 +861,15 @@ export default function DeviceDetail() {
                       size="sm"
                       onClick={() => {
                         if (!pppoeUser || !pppoePass) { toast({ title: "Campos obrigatórios", variant: "destructive" }); return; }
-                        pppoeConfigMutation.mutate({ username: pppoeUser, password: pppoePass });
+                        const pppConns = wanConnections.filter((w) => w.type === "PPPoE");
+                        let wd = 1, wcdI = 1, ci = 1;
+                        if (pppConns.length > 1 && pppoeTarget) {
+                          const parts = pppoeTarget.split("-").map(Number);
+                          if (parts.length === 3 && parts.every(n => n >= 1)) { wd = parts[0]; wcdI = parts[1]; ci = parts[2]; }
+                        } else if (pppConns.length === 1) {
+                          wd = pppConns[0].wanDeviceIndex || 1; wcdI = pppConns[0].wcdIndex || 1; ci = pppConns[0].connIndex || 1;
+                        }
+                        pppoeConfigMutation.mutate({ username: pppoeUser, password: pppoePass, wanDeviceIndex: wd, wcdIndex: wcdI, connIndex: ci });
                       }}
                       disabled={pppoeConfigMutation.isPending || !device.genieId}
                       className="w-full"
