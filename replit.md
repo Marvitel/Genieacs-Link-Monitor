@@ -109,11 +109,12 @@ The extractDeviceInfo uses a dual approach:
 2. Dynamic scanner (findPonData): Recursively traverses the device tree looking for any key containing "gpon", "pon", or "optical" and extracts RXPower, TXPower, Temperature, Voltage values regardless of exact path
 
 ### Known PON Path Variants
-- Intelbras: X_GponInterafceConfig (typo in firmware) - WANDevice.1
+- Intelbras: X_GponInterafceConfig (typo in firmware) - WANDevice.1. Values already in dBm
 - ZTE: X_ZTE-COM_GponInterfaceConfig + X_ZTE-COM_WANPONInterfaceConfig - WANDevice.2
-- TP-Link: Device.Optical + Device.X_TP_GPON
-- Huawei: X_HW_GponInterfaceConfig
+- TP-Link XX530v/Device2/EX520: Device.Optical.Interface.1.X_TP_GPON_Config (RXPower, TXPower, TransceiverTemperature, SupplyVottage with typo). Values in raw units: RX/TX = 10*log10(value/10000) for dBm, Temp = value/256 for °C, Volt = value/1000 for V
+- Huawei: X_HW_GponInterfaceConfig or via InternetGatewayDevice paths
 - Datacom: No PON signal data via TR-069 (only X_CT-COM_WANGponLinkConfig for link config)
+- TP-Link: Both TR098 and TR181 trees enabled. OpticalSignalLevel/TransmitOpticalLevel always return 0 (firmware limitation). Real data only via X_TP_GPON_Config proprietary path
 
 ### Live Device Info (extractLiveDeviceInfo)
 Full real-time device data from GenieACS:

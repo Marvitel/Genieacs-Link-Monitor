@@ -490,7 +490,8 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${igd}.WANDevice.1.X_ALU_GponInterfaceConfig.RXPower`,
     `${igd}.X_CT-COM_GponInterfaceConfig.RXPower`,
     `${igd}.X_GponInterfaceConfig.RXPower`,
-    `${igd}.X_GponInterfaceConfig.1.RXPower`
+    `${igd}.X_GponInterfaceConfig.1.RXPower`,
+    `${igd}.WANDevice.2.X_ZTE-COM_GponInterfaceConfig.RXPower`
   ) as number | null;
 
   const txPower = firstOf(device,
@@ -506,7 +507,8 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${igd}.WANDevice.1.X_ALU_GponInterfaceConfig.TXPower`,
     `${igd}.X_CT-COM_GponInterfaceConfig.TXPower`,
     `${igd}.X_GponInterfaceConfig.TXPower`,
-    `${igd}.X_GponInterfaceConfig.1.TXPower`
+    `${igd}.X_GponInterfaceConfig.1.TXPower`,
+    `${igd}.WANDevice.2.X_ZTE-COM_GponInterfaceConfig.TXPower`
   ) as number | null;
 
   const temperature = firstOf(device,
@@ -522,7 +524,8 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.Temperature`,
     `${igd}.X_CT-COM_GponInterfaceConfig.Temperature`,
     `${igd}.X_GponInterfaceConfig.Temperature`,
-    `${igd}.X_GponInterfaceConfig.1.Temperature`
+    `${igd}.X_GponInterfaceConfig.1.Temperature`,
+    `${igd}.WANDevice.2.X_ZTE-COM_GponInterfaceConfig.Temperature`
   ) as number | null;
 
   const voltage = firstOf(device,
@@ -537,8 +540,32 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.Voltage`,
     `${igd}.X_CT-COM_GponInterfaceConfig.Voltage`,
     `${igd}.X_GponInterfaceConfig.Voltage`,
-    `${igd}.X_GponInterfaceConfig.1.Voltage`
+    `${igd}.X_GponInterfaceConfig.1.Voltage`,
+    `${igd}.WANDevice.2.X_ZTE-COM_GponInterfaceConfig.Voltage`
   ) as number | null;
+
+  const tpGponRx = getVal(device, `${dev}.Optical.Interface.1.X_TP_GPON_Config.RXPower`) as number | null;
+  const tpGponTx = getVal(device, `${dev}.Optical.Interface.1.X_TP_GPON_Config.TXPower`) as number | null;
+  const tpGponTemp = getVal(device, `${dev}.Optical.Interface.1.X_TP_GPON_Config.TransceiverTemperature`) as number | null;
+  const tpGponVolt = getVal(device, `${dev}.Optical.Interface.1.X_TP_GPON_Config.SupplyVottage`) as number | null;
+
+  let finalRx = rxPower;
+  let finalTx = txPower;
+  let finalTemp = temperature;
+  let finalVolt = voltage;
+
+  if (finalRx === null && tpGponRx !== null && tpGponRx > 0) {
+    finalRx = Math.round((10 * Math.log10(tpGponRx / 10000)) * 100) / 100;
+  }
+  if (finalTx === null && tpGponTx !== null && tpGponTx > 0) {
+    finalTx = Math.round((10 * Math.log10(tpGponTx / 10000)) * 100) / 100;
+  }
+  if (finalTemp === null && tpGponTemp !== null && tpGponTemp > 0) {
+    finalTemp = Math.round((tpGponTemp / 256) * 10) / 10;
+  }
+  if (finalVolt === null && tpGponVolt !== null && tpGponVolt > 0) {
+    finalVolt = Math.round((tpGponVolt / 1000) * 1000) / 1000;
+  }
 
   const connectionType = pppoeUser ? "PPPoE" : (ipAddress ? "DHCP" : "");
 
@@ -562,10 +589,10 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     wifiPassword5g,
     pppoeUser,
     connectionType,
-    rxPower: rxPower !== null ? (typeof rxPower === 'number' && rxPower > 1000 ? rxPower / 10000 : rxPower) : null,
-    txPower: txPower !== null ? (typeof txPower === 'number' && txPower > 1000 ? txPower / 10000 : txPower) : null,
-    temperature: temperature !== null ? (typeof temperature === 'number' && temperature > 1000 ? temperature / 256 : temperature) : null,
-    voltage,
+    rxPower: finalRx !== null ? (typeof finalRx === 'number' && finalRx > 1000 ? finalRx / 10000 : finalRx) : null,
+    txPower: finalTx !== null ? (typeof finalTx === 'number' && finalTx > 1000 ? finalTx / 10000 : finalTx) : null,
+    temperature: finalTemp !== null ? (typeof finalTemp === 'number' && finalTemp > 1000 ? finalTemp / 256 : finalTemp) : null,
+    voltage: finalVolt,
   };
 }
 
@@ -655,69 +682,99 @@ function findPonData(device: GenieACSDevice): { rxPower: number | null; txPower:
   const result = { rxPower: null as number | null, txPower: null as number | null, temperature: null as number | null, voltage: null as number | null };
 
   const igd = (device as Record<string, unknown>)["InternetGatewayDevice"] as Record<string, unknown> | undefined;
-  if (!igd) return result;
+  if (igd) {
+    const wanDevice1 = (igd["WANDevice"] as Record<string, unknown>)?.["1"] as Record<string, unknown> | undefined;
+    const wanDevice2 = (igd["WANDevice"] as Record<string, unknown>)?.["2"] as Record<string, unknown> | undefined;
+    const searchContainers = [wanDevice1, wanDevice2, igd];
 
-  const wanDevice1 = (igd["WANDevice"] as Record<string, unknown>)?.["1"] as Record<string, unknown> | undefined;
-  const searchContainers = [wanDevice1, igd];
+    for (const container of searchContainers) {
+      if (!container) continue;
+      for (const [key, val] of Object.entries(container)) {
+        if (key.startsWith("_")) continue;
+        const keyLower = key.toLowerCase();
+        if (!keyLower.includes("gpon") && !keyLower.includes("pon") && !keyLower.includes("optical")) continue;
 
-  for (const container of searchContainers) {
-    if (!container) continue;
-    for (const [key, val] of Object.entries(container)) {
-      if (key.startsWith("_")) continue;
-      const keyLower = key.toLowerCase();
-      if (!keyLower.includes("gpon") && !keyLower.includes("pon") && !keyLower.includes("optical")) continue;
+        const branch = val as Record<string, unknown>;
+        if (!branch || typeof branch !== "object") continue;
 
-      const branch = val as Record<string, unknown>;
-      if (!branch || typeof branch !== "object") continue;
+        const findInBranch = (obj: Record<string, unknown>) => {
+          for (const [k, v] of Object.entries(obj)) {
+            if (k.startsWith("_")) continue;
+            const vObj = v as Record<string, unknown>;
+            if (!vObj || typeof vObj !== "object") continue;
 
-      const findInBranch = (obj: Record<string, unknown>) => {
-        for (const [k, v] of Object.entries(obj)) {
-          if (k.startsWith("_")) continue;
-          const vObj = v as Record<string, unknown>;
-          if (!vObj || typeof vObj !== "object") continue;
-
-          if ("_value" in vObj) {
-            const kl = k.toLowerCase();
-            const numVal = Number(vObj._value);
-            if (!isNaN(numVal)) {
-              if (kl === "rxpower" && result.rxPower === null) result.rxPower = numVal;
-              else if (kl === "txpower" && result.txPower === null) result.txPower = numVal;
-              else if (kl === "temperature" && result.temperature === null) result.temperature = numVal;
-              else if (kl === "voltage" && result.voltage === null) result.voltage = numVal;
+            if ("_value" in vObj) {
+              const kl = k.toLowerCase();
+              const numVal = Number(vObj._value);
+              if (!isNaN(numVal)) {
+                if (kl === "rxpower" && result.rxPower === null) result.rxPower = numVal;
+                else if (kl === "txpower" && result.txPower === null) result.txPower = numVal;
+                else if ((kl === "temperature" || kl === "transceivertemperature") && result.temperature === null) result.temperature = numVal;
+                else if ((kl === "voltage" || kl === "supplyvottage" || kl === "supplyvoltage") && result.voltage === null) result.voltage = numVal;
+              }
+            } else {
+              findInBranch(vObj);
             }
-          } else {
-            findInBranch(vObj);
           }
-        }
-      };
-      findInBranch(branch);
+        };
+        findInBranch(branch);
+      }
     }
   }
 
   const dev = (device as Record<string, unknown>)["Device"] as Record<string, unknown> | undefined;
   if (dev) {
-    const optical = dev["Optical"] as Record<string, unknown> | undefined;
-    if (optical) {
-      const findInBranch = (obj: Record<string, unknown>) => {
-        for (const [k, v] of Object.entries(obj)) {
-          if (k.startsWith("_")) continue;
-          const vObj = v as Record<string, unknown>;
-          if (!vObj || typeof vObj !== "object") continue;
-          if ("_value" in vObj) {
-            const kl = k.toLowerCase();
-            const numVal = Number(vObj._value);
-            if (!isNaN(numVal)) {
-              if ((kl === "rxpower" || kl === "receivepower" || kl === "opticalreceivepower") && result.rxPower === null) result.rxPower = numVal;
-              else if ((kl === "txpower" || kl === "transmitpower" || kl === "opticaltransmitpower") && result.txPower === null) result.txPower = numVal;
-              else if (kl === "temperature" && result.temperature === null) result.temperature = numVal;
-              else if (kl === "voltage" && result.voltage === null) result.voltage = numVal;
+    const tpGponCfg = (dev as any)?.Optical?.Interface?.["1"]?.X_TP_GPON_Config as Record<string, unknown> | undefined;
+    if (tpGponCfg) {
+      const rx = tpGponCfg.RXPower as Record<string, unknown> | undefined;
+      const tx = tpGponCfg.TXPower as Record<string, unknown> | undefined;
+      const temp = tpGponCfg.TransceiverTemperature as Record<string, unknown> | undefined;
+      const volt = tpGponCfg.SupplyVottage as Record<string, unknown> | undefined;
+
+      if (rx && "_value" in rx && result.rxPower === null) {
+        const v = Number(rx._value);
+        if (!isNaN(v) && v > 0) result.rxPower = Math.round((10 * Math.log10(v / 10000)) * 100) / 100;
+      }
+      if (tx && "_value" in tx && result.txPower === null) {
+        const v = Number(tx._value);
+        if (!isNaN(v) && v > 0) result.txPower = Math.round((10 * Math.log10(v / 10000)) * 100) / 100;
+      }
+      if (temp && "_value" in temp && result.temperature === null) {
+        const v = Number(temp._value);
+        if (!isNaN(v) && v > 0) result.temperature = Math.round((v / 256) * 10) / 10;
+      }
+      if (volt && "_value" in volt && result.voltage === null) {
+        const v = Number(volt._value);
+        if (!isNaN(v) && v > 0) result.voltage = Math.round((v / 1000) * 1000) / 1000;
+      }
+    }
+
+    if (result.rxPower === null || result.txPower === null) {
+      const ponBranches = ["Optical", "X_TP_GPON", "X_TP_DeviceComponent"];
+      for (const branchName of ponBranches) {
+        const branch = dev[branchName] as Record<string, unknown> | undefined;
+        if (!branch) continue;
+        const findInBranch = (obj: Record<string, unknown>) => {
+          for (const [k, v] of Object.entries(obj)) {
+            if (k.startsWith("_")) continue;
+            const vObj = v as Record<string, unknown>;
+            if (!vObj || typeof vObj !== "object") continue;
+            if ("_value" in vObj) {
+              const kl = k.toLowerCase();
+              const numVal = Number(vObj._value);
+              if (!isNaN(numVal)) {
+                if ((kl === "rxpower" || kl === "receivepower" || kl === "opticalreceivepower" || kl === "opticalsignallevel") && result.rxPower === null) result.rxPower = numVal;
+                else if ((kl === "txpower" || kl === "transmitpower" || kl === "opticaltransmitpower" || kl === "transmitopticallevel") && result.txPower === null) result.txPower = numVal;
+                else if ((kl === "temperature" || kl === "transceivertemperature") && result.temperature === null) result.temperature = numVal;
+                else if ((kl === "voltage" || kl === "supplyvottage" || kl === "supplyvoltage") && result.voltage === null) result.voltage = numVal;
+              }
+            } else {
+              findInBranch(vObj);
             }
-          } else {
-            findInBranch(vObj);
           }
-        }
-      };
-      findInBranch(optical);
+        };
+        findInBranch(branch);
+      }
     }
   }
 

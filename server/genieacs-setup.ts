@@ -172,8 +172,8 @@ declare("Device.WiFi.AccessPoint.*.Security.KeyPassphrase", {value: 1});
 const now = Date.now();
 const hourly = Date.now(3600000);
 
-// Sinal GPON - valores diretos para paths conhecidos de cada fabricante
-// Intelbras (WANDevice.1)
+// === TR-098 (InternetGatewayDevice) ===
+// Intelbras
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.RXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.Temperature", {value: now});
@@ -193,23 +193,34 @@ declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.TXPower", {value:
 declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.Temperature", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.Voltage", {value: now});
 
-// ZTE usa WANDevice.2 com X_ZTE-COM_GponInterfaceConfig
+// ZTE WANDevice.2
 declare("InternetGatewayDevice.WANDevice.2.X_ZTE-COM_GponInterfaceConfig.*", {path: hourly, value: hourly});
 declare("InternetGatewayDevice.WANDevice.2.X_ZTE-COM_WANPONInterfaceConfig.*", {path: hourly, value: hourly});
 
-// Descoberta de tree PON - apenas 1x por hora
+// Hourly discovery
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.*", {path: hourly, value: hourly});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.*", {path: hourly, value: hourly});
 declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.*", {path: hourly, value: hourly});
 
-// TP-Link Device.Optical e Device.X_TP_GPON
-declare("Device.Optical.*", {path: hourly, value: hourly});
-declare("Device.X_TP_GPON.*", {path: hourly, value: hourly});
+// === TR-181 (Device) - TP-Link ===
+// Standard TR-181 Optical Interface
+declare("Device.Optical.Interface.1.OpticalSignalLevel", {value: now});
+declare("Device.Optical.Interface.1.TransmitOpticalLevel", {value: now});
+declare("Device.Optical.Interface.1.Status", {value: now});
 
-// Temperatura do dispositivo
+// TP-Link proprietary GPON paths under Optical
+declare("Device.Optical.Interface.1.X_TP_GPON_Config.*", {path: hourly, value: hourly});
+declare("Device.Optical.Interface.1.X_TP_OMCIStats.*", {path: hourly, value: hourly});
+declare("Device.Optical.Interface.1.Stats.*", {path: hourly, value: hourly});
+
+// TP-Link X_TP_GPON top level
+declare("Device.X_TP_GPON.*", {path: hourly, value: hourly});
+declare("Device.Optical.*", {path: hourly, value: hourly});
+
+// Temperature
 declare("InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value", {value: now});
 
-// Ethernet ports status
+// Ethernet ports
 declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Status", {value: now});
 declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.2.Status", {value: now});
 declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.3.Status", {value: now});
