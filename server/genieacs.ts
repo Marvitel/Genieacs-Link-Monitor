@@ -932,6 +932,7 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
           const enable = getVal(device, `${wanBase}.Enable`);
           if (ip || name || status) {
             const vlan = getVal(device, `${wcdBase}.X_CT-COM_WANGponLinkConfig.VLANIDMark`)
+              ?? getVal(device, `${wanBase}.X_ZTE-COM_VLANID`)
               ?? getVal(device, `${wcdBase}.WANEthernetLinkConfig.X_TP_VID`)
               ?? getVal(device, `${wanBase}.X_VLAN_ID`)
               ?? getVal(device, `${wcdBase}.WANEthernetLinkConfig.X_VLAN_ID`);
