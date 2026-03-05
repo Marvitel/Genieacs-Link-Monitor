@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   mongodb:
-    image: mongo:6
+    image: mongo:4.4
     container_name: genieacs-mongodb
     restart: always
     volumes:
@@ -12,15 +10,16 @@ services:
     networks:
       - genieacs
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      test: echo 'db.runCommand("ping").ok' | mongo --quiet
       interval: 10s
       timeout: 5s
       retries: 5
 
   genieacs-cwmp:
-    image: genieacs/genieacs:latest
+    image: node:18-slim
     container_name: genieacs-cwmp
     restart: always
+    working_dir: /opt/genieacs
     depends_on:
       mongodb:
         condition: service_healthy
@@ -29,20 +28,21 @@ services:
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs
       - GENIEACS_CWMP_ACCESS_LOG_FILE=/var/log/genieacs/cwmp-access.log
-      - GENIEACS_CWMP_LOG_FILE=/var/log/genieacs/cwmp.log
       - GENIEACS_EXT_DIR=/opt/genieacs/ext
       - GENIEACS_CWMP_SSL=false
     volumes:
+      - genieacs_app:/opt/genieacs
       - genieacs_ext:/opt/genieacs/ext
       - genieacs_logs:/var/log/genieacs
-    entrypoint: ["genieacs-cwmp"]
+    entrypoint: ["/bin/sh", "-c", "npm install -g genieacs@1.2.13 && mkdir -p /var/log/genieacs /opt/genieacs/ext && genieacs-cwmp"]
     networks:
       - genieacs
 
   genieacs-nbi:
-    image: genieacs/genieacs:latest
+    image: node:18-slim
     container_name: genieacs-nbi
     restart: always
+    working_dir: /opt/genieacs
     depends_on:
       mongodb:
         condition: service_healthy
@@ -51,17 +51,18 @@ services:
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs
       - GENIEACS_NBI_ACCESS_LOG_FILE=/var/log/genieacs/nbi-access.log
-      - GENIEACS_NBI_LOG_FILE=/var/log/genieacs/nbi.log
     volumes:
+      - genieacs_app:/opt/genieacs
       - genieacs_logs:/var/log/genieacs
-    entrypoint: ["genieacs-nbi"]
+    entrypoint: ["/bin/sh", "-c", "npm install -g genieacs@1.2.13 && mkdir -p /var/log/genieacs && genieacs-nbi"]
     networks:
       - genieacs
 
   genieacs-fs:
-    image: genieacs/genieacs:latest
+    image: node:18-slim
     container_name: genieacs-fs
     restart: always
+    working_dir: /opt/genieacs
     depends_on:
       mongodb:
         condition: service_healthy
@@ -70,19 +71,20 @@ services:
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs
       - GENIEACS_FS_ACCESS_LOG_FILE=/var/log/genieacs/fs-access.log
-      - GENIEACS_FS_LOG_FILE=/var/log/genieacs/fs.log
-      - GENIEACS_FS_HOSTNAME=${FS_HOSTNAME:-acs.seudominio.com.br}
+      - GENIEACS_FS_HOSTNAME=${FS_HOSTNAME:-191.52.255.46}
       - GENIEACS_FS_PORT=7567
     volumes:
+      - genieacs_app:/opt/genieacs
       - genieacs_logs:/var/log/genieacs
-    entrypoint: ["genieacs-fs"]
+    entrypoint: ["/bin/sh", "-c", "npm install -g genieacs@1.2.13 && mkdir -p /var/log/genieacs && genieacs-fs"]
     networks:
       - genieacs
 
   genieacs-ui:
-    image: genieacs/genieacs:latest
+    image: node:18-slim
     container_name: genieacs-ui
     restart: always
+    working_dir: /opt/genieacs
     depends_on:
       mongodb:
         condition: service_healthy
@@ -91,15 +93,16 @@ services:
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs
       - GENIEACS_UI_ACCESS_LOG_FILE=/var/log/genieacs/ui-access.log
-      - GENIEACS_UI_LOG_FILE=/var/log/genieacs/ui.log
     volumes:
+      - genieacs_app:/opt/genieacs
       - genieacs_logs:/var/log/genieacs
-    entrypoint: ["genieacs-ui"]
+    entrypoint: ["/bin/sh", "-c", "npm install -g genieacs@1.2.13 && mkdir -p /var/log/genieacs && genieacs-ui"]
     networks:
       - genieacs
 
 volumes:
   mongo_data:
+  genieacs_app:
   genieacs_ext:
   genieacs_logs:
 
