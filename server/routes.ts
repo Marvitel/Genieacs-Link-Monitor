@@ -338,6 +338,98 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/devices/:id/voip-config", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const voipSchema = z.object({
+      profileIndex: z.number().min(1).max(2),
+      lineIndex: z.number().min(1).max(2),
+      enabled: z.boolean().optional(),
+      directoryNumber: z.string().optional(),
+      sipAuthUser: z.string().optional(),
+      sipAuthPassword: z.string().optional(),
+      sipUri: z.string().optional(),
+      sipRegistrar: z.string().optional(),
+      sipRegistrarPort: z.number().optional(),
+      sipProxyServer: z.string().optional(),
+      sipProxyPort: z.number().optional(),
+      sipOutboundProxy: z.string().optional(),
+      sipOutboundProxyPort: z.number().optional(),
+      sipDomain: z.string().optional(),
+    });
+    const parsed = voipSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    const { profileIndex: pi, lineIndex: li, ...data } = parsed.data;
+    const igd = "InternetGatewayDevice";
+    const lineBase = `${igd}.Services.VoiceService.1.VoiceProfile.${pi}.Line.${li}`;
+    const sipBase = `${igd}.Services.VoiceService.1.VoiceProfile.${pi}.SIP`;
+    const parameters: Array<[string, string | number | boolean]> = [];
+    const changes: string[] = [];
+
+    if (data.enabled !== undefined) {
+      parameters.push([`${lineBase}.Enable`, data.enabled ? "Enabled" : "Disabled"]);
+      changes.push(`Linha ${pi}.${li} ${data.enabled ? "habilitada" : "desabilitada"}`);
+    }
+    if (data.directoryNumber !== undefined) {
+      parameters.push([`${lineBase}.DirectoryNumber`, data.directoryNumber]);
+      changes.push(`Número: ${data.directoryNumber}`);
+    }
+    if (data.sipAuthUser !== undefined) {
+      parameters.push([`${lineBase}.SIP.AuthUserName`, data.sipAuthUser]);
+      changes.push(`Auth User: ${data.sipAuthUser}`);
+    }
+    if (data.sipAuthPassword !== undefined) {
+      parameters.push([`${lineBase}.SIP.AuthPassword`, data.sipAuthPassword]);
+      changes.push(`Auth Password alterado`);
+    }
+    if (data.sipUri !== undefined) {
+      parameters.push([`${lineBase}.SIP.URI`, data.sipUri]);
+    }
+    if (data.sipRegistrar !== undefined) {
+      parameters.push([`${sipBase}.RegistrarServer`, data.sipRegistrar]);
+      changes.push(`Registrar: ${data.sipRegistrar}`);
+    }
+    if (data.sipRegistrarPort !== undefined) {
+      parameters.push([`${sipBase}.RegistrarServerPort`, data.sipRegistrarPort]);
+    }
+    if (data.sipProxyServer !== undefined) {
+      parameters.push([`${sipBase}.ProxyServer`, data.sipProxyServer]);
+      changes.push(`Proxy: ${data.sipProxyServer}`);
+    }
+    if (data.sipProxyPort !== undefined) {
+      parameters.push([`${sipBase}.ProxyServerPort`, data.sipProxyPort]);
+    }
+    if (data.sipOutboundProxy !== undefined) {
+      parameters.push([`${sipBase}.OutboundProxy`, data.sipOutboundProxy]);
+    }
+    if (data.sipOutboundProxyPort !== undefined) {
+      parameters.push([`${sipBase}.OutboundProxyPort`, data.sipOutboundProxyPort]);
+    }
+    if (data.sipDomain !== undefined) {
+      parameters.push([`${sipBase}.UserAgentDomain`, data.sipDomain]);
+    }
+
+    if (parameters.length === 0) {
+      return res.status(400).json({ message: "Nenhum parâmetro VoIP informado" });
+    }
+
+    try {
+      await genieSetMultipleParameters(device.genieId, parameters);
+      await storage.createDeviceLog({
+        deviceId: device.id,
+        eventType: "config-change",
+        message: `VoIP atualizado: ${changes.join(", ") || "parâmetros alterados"}`,
+        severity: "info",
+      });
+      res.json({ message: "Configuração VoIP enviada" });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
   app.post("/api/devices/:id/firmware-update", async (req, res) => {
     const device = await storage.getDevice(req.params.id);
     if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });

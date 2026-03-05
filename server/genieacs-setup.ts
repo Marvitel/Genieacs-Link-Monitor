@@ -249,6 +249,60 @@ declare("Device.Hosts.Host.*", {value: now});
 declare("Device.DHCPv4.Server.Pool.*", {value: now});
 `,
 
+  "netcontrol-voip": `
+const now = Date.now();
+const hourly = Date.now(3600000);
+
+// === TR-098 VoiceService ===
+// Discover VoiceService branches
+declare("InternetGatewayDevice.Services.VoiceService.*", {path: hourly});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.*", {path: hourly});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.*", {path: hourly});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.Line.*", {path: hourly});
+
+// VoiceProfile SIP settings
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.SIP.ProxyServer", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.SIP.ProxyServerPort", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.SIP.RegistrarServer", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.SIP.RegistrarServerPort", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.SIP.OutboundProxy", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.SIP.OutboundProxyPort", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.SIP.UserAgentDomain", {value: now});
+
+// VoiceProfile 2
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.SIP.ProxyServer", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.SIP.RegistrarServer", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.SIP.RegistrarServerPort", {value: now});
+
+// Line 1 settings (Profile 1)
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.Enable", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.DirectoryNumber", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.Status", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.SIP.AuthUserName", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.SIP.AuthPassword", {value: 1});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.SIP.URI", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.CallingFeatures.CallWaitingEnable", {value: now});
+
+// Line 2 settings (Profile 1)
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.2.Enable", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.2.DirectoryNumber", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.2.Status", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.2.SIP.AuthUserName", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.2.SIP.AuthPassword", {value: 1});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.2.SIP.URI", {value: now});
+
+// Line 1 settings (Profile 2)
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.Line.1.Enable", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.Line.1.DirectoryNumber", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.Line.1.Status", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.Line.1.SIP.AuthUserName", {value: now});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.Line.1.SIP.AuthPassword", {value: 1});
+declare("InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.2.Line.1.SIP.URI", {value: now});
+
+// PhyInterface (FXS ports)
+declare("InternetGatewayDevice.Services.VoiceService.1.PhyInterface.*", {path: hourly});
+`,
+
   "netcontrol-diagnostics": `
 const now = Date.now();
 
@@ -306,6 +360,7 @@ const PRESETS: Record<string, GeniePreset> = {
       { type: "provision", name: "netcontrol-wifi" },
       { type: "provision", name: "netcontrol-pon" },
       { type: "provision", name: "netcontrol-lan" },
+      { type: "provision", name: "netcontrol-voip" },
       { type: "provision", name: "netcontrol-diagnostics" },
     ],
   },
@@ -317,6 +372,7 @@ const PRESETS: Record<string, GeniePreset> = {
       { type: "provision", name: "inform" },
       { type: "provision", name: "netcontrol-inform" },
       { type: "provision", name: "netcontrol-pon" },
+      { type: "provision", name: "netcontrol-voip" },
     ],
   },
   "netcontrol-boot": {
@@ -330,6 +386,7 @@ const PRESETS: Record<string, GeniePreset> = {
       { type: "provision", name: "netcontrol-wifi" },
       { type: "provision", name: "netcontrol-pon" },
       { type: "provision", name: "netcontrol-lan" },
+      { type: "provision", name: "netcontrol-voip" },
       { type: "provision", name: "netcontrol-diagnostics" },
     ],
   },

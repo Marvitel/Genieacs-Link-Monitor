@@ -134,9 +134,17 @@ Sends 4 groups of getParameterValues tasks to force full data refresh:
 - LANDevice + Hosts + Ethernet
 - Services
 
+### VoIP Support
+- Provision `netcontrol-voip` collects VoiceService data from TR-098 devices
+- Paths: `InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.{1,2}.Line.{1,2}.*`
+- SIP settings per profile: ProxyServer, RegistrarServer, OutboundProxy, UserAgentDomain (+ ports)
+- Line settings: Enable, DirectoryNumber, SIP.AuthUserName, SIP.AuthPassword, SIP.URI
+- Edit endpoint: POST `/api/devices/:id/voip-config` with profileIndex, lineIndex, and SIP fields
+- Frontend: VoipLineCard component with view/edit toggle per line, enable/disable toggle
+
 ### Presets (3 rules - all channel "netcontrol")
 - **netcontrol-bootstrap** - BOOTSTRAP event: inform + all provisions (full data collection)
-- **netcontrol-periodic** - PERIODIC event: inform + netcontrol-inform + netcontrol-pon (lightweight)
+- **netcontrol-periodic** - PERIODIC event: inform + netcontrol-inform + netcontrol-pon + netcontrol-voip
 - **netcontrol-boot** - BOOT event: inform + all provisions (full data collection)
 
 ## GenieACS Deployment (deploy/genieacs/)

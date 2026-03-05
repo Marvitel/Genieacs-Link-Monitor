@@ -669,12 +669,22 @@ export interface WanConnection {
 
 export interface VoipLine {
   index: number;
+  profileIndex: number;
+  lineIndex: number;
   enabled: boolean;
   directoryNumber: string;
   status: string;
   sipUri: string;
   sipRegistrar: string;
+  sipRegistrarPort: string;
+  sipProxyServer: string;
+  sipProxyPort: string;
+  sipOutboundProxy: string;
+  sipOutboundProxyPort: string;
   sipAuthUser: string;
+  sipAuthPassword: string;
+  sipDomain: string;
+  callWaitingEnabled: boolean;
 }
 
 export interface DeviceLiveInfo {
@@ -955,25 +965,38 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
   }
 
   const voipLines: VoipLine[] = [];
-  for (let i = 1; i <= 4; i++) {
-    const voipBase1 = `${igd}.Services.VoiceService.1.VoiceProfile.1.Line.${i}`;
-    const voipBase2 = `${igd}.Services.VoiceService.1.VoiceProfile.${i}.Line.1`;
-    for (const voipBase of [voipBase1, voipBase2]) {
+  let voipIdx = 0;
+  for (let pi = 1; pi <= 2; pi++) {
+    for (let li = 1; li <= 2; li++) {
+      const voipBase = `${igd}.Services.VoiceService.1.VoiceProfile.${pi}.Line.${li}`;
+      const sipBase = `${igd}.Services.VoiceService.1.VoiceProfile.${pi}.SIP`;
       const dirNum = getVal(device, `${voipBase}.DirectoryNumber`) as string | null;
       const sipUri = getVal(device, `${voipBase}.SIP.URI`) as string | null;
       const enabled = getVal(device, `${voipBase}.Enable`);
-      if (dirNum || sipUri || enabled !== null) {
+      const authUser = getVal(device, `${voipBase}.SIP.AuthUserName`) as string | null;
+      if (dirNum || sipUri || enabled !== null || authUser) {
+        voipIdx++;
         voipLines.push({
-          index: i,
+          index: voipIdx,
+          profileIndex: pi,
+          lineIndex: li,
           enabled: enabled === true || enabled === 1 || enabled === "Enabled" || enabled === "1",
           directoryNumber: dirNum || "",
           status: (getVal(device, `${voipBase}.Status`) as string) || "",
           sipUri: sipUri || "",
-          sipRegistrar: (getVal(device, `${igd}.Services.VoiceService.1.VoiceProfile.1.SIP.RegistrarServer`) as string) ||
-                        (getVal(device, `${igd}.Services.VoiceService.1.VoiceProfile.${i}.SIP.RegistrarServer`) as string) || "",
-          sipAuthUser: (getVal(device, `${voipBase}.SIP.AuthUserName`) as string) || "",
+          sipRegistrar: (getVal(device, `${sipBase}.RegistrarServer`) as string) || "",
+          sipRegistrarPort: String(getVal(device, `${sipBase}.RegistrarServerPort`) || ""),
+          sipProxyServer: (getVal(device, `${sipBase}.ProxyServer`) as string) || "",
+          sipProxyPort: String(getVal(device, `${sipBase}.ProxyServerPort`) || ""),
+          sipOutboundProxy: (getVal(device, `${sipBase}.OutboundProxy`) as string) || "",
+          sipOutboundProxyPort: String(getVal(device, `${sipBase}.OutboundProxyPort`) || ""),
+          sipAuthUser: authUser || "",
+          sipAuthPassword: (getVal(device, `${voipBase}.SIP.AuthPassword`) as string) || "",
+          sipDomain: (getVal(device, `${sipBase}.UserAgentDomain`) as string) || "",
+          callWaitingEnabled: getVal(device, `${voipBase}.CallingFeatures.CallWaitingEnable`) === true ||
+                              getVal(device, `${voipBase}.CallingFeatures.CallWaitingEnable`) === 1 ||
+                              getVal(device, `${voipBase}.CallingFeatures.CallWaitingEnable`) === "1",
         });
-        break;
       }
     }
   }

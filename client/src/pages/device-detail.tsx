@@ -98,12 +98,22 @@ interface WanConnection {
 
 interface VoipLine {
   index: number;
+  profileIndex: number;
+  lineIndex: number;
   enabled: boolean;
   directoryNumber: string;
   status: string;
   sipUri: string;
   sipRegistrar: string;
+  sipRegistrarPort: string;
+  sipProxyServer: string;
+  sipProxyPort: string;
+  sipOutboundProxy: string;
+  sipOutboundProxyPort: string;
   sipAuthUser: string;
+  sipAuthPassword: string;
+  sipDomain: string;
+  callWaitingEnabled: boolean;
 }
 
 interface LiveInfo {
@@ -172,6 +182,207 @@ function normalizeRxPower(val: number | null): number | null {
   if (val === null) return null;
   if (val > 1000) return val / 10000;
   return val;
+}
+
+function VoipLineCard({ line, deviceId, genieId, liveLoading }: { line: VoipLine; deviceId: string; genieId: string; liveLoading: boolean }) {
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    directoryNumber: line.directoryNumber,
+    sipAuthUser: line.sipAuthUser,
+    sipAuthPassword: line.sipAuthPassword,
+    sipRegistrar: line.sipRegistrar,
+    sipRegistrarPort: line.sipRegistrarPort,
+    sipProxyServer: line.sipProxyServer,
+    sipProxyPort: line.sipProxyPort,
+    sipOutboundProxy: line.sipOutboundProxy,
+    sipOutboundProxyPort: line.sipOutboundProxyPort,
+    sipDomain: line.sipDomain,
+    sipUri: line.sipUri,
+  });
+
+  useEffect(() => {
+    setFormData({
+      directoryNumber: line.directoryNumber,
+      sipAuthUser: line.sipAuthUser,
+      sipAuthPassword: line.sipAuthPassword,
+      sipRegistrar: line.sipRegistrar,
+      sipRegistrarPort: line.sipRegistrarPort,
+      sipProxyServer: line.sipProxyServer,
+      sipProxyPort: line.sipProxyPort,
+      sipOutboundProxy: line.sipOutboundProxy,
+      sipOutboundProxyPort: line.sipOutboundProxyPort,
+      sipDomain: line.sipDomain,
+      sipUri: line.sipUri,
+    });
+  }, [line]);
+
+  const voipMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await apiRequest("POST", `/api/devices/${deviceId}/voip-config`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Configuração VoIP enviada" });
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/devices", deviceId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices", deviceId, "live"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/device-logs"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao configurar VoIP", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await apiRequest("POST", `/api/devices/${deviceId}/voip-config`, {
+        profileIndex: line.profileIndex,
+        lineIndex: line.lineIndex,
+        enabled,
+      });
+      return res.json();
+    },
+    onSuccess: (_, enabled) => {
+      toast({ title: `Linha ${enabled ? "habilitada" : "desabilitada"}` });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices", deviceId, "live"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSave = () => {
+    const payload: Record<string, unknown> = {
+      profileIndex: line.profileIndex,
+      lineIndex: line.lineIndex,
+    };
+    if (formData.directoryNumber !== line.directoryNumber) payload.directoryNumber = formData.directoryNumber;
+    if (formData.sipAuthUser !== line.sipAuthUser) payload.sipAuthUser = formData.sipAuthUser;
+    if (formData.sipAuthPassword && formData.sipAuthPassword !== line.sipAuthPassword) payload.sipAuthPassword = formData.sipAuthPassword;
+    if (formData.sipRegistrar !== line.sipRegistrar) payload.sipRegistrar = formData.sipRegistrar;
+    if (formData.sipRegistrarPort !== line.sipRegistrarPort) payload.sipRegistrarPort = Number(formData.sipRegistrarPort) || 5060;
+    if (formData.sipProxyServer !== line.sipProxyServer) payload.sipProxyServer = formData.sipProxyServer;
+    if (formData.sipProxyPort !== line.sipProxyPort) payload.sipProxyPort = Number(formData.sipProxyPort) || 5060;
+    if (formData.sipOutboundProxy !== line.sipOutboundProxy) payload.sipOutboundProxy = formData.sipOutboundProxy;
+    if (formData.sipOutboundProxyPort !== line.sipOutboundProxyPort) payload.sipOutboundProxyPort = Number(formData.sipOutboundProxyPort) || 5060;
+    if (formData.sipDomain !== line.sipDomain) payload.sipDomain = formData.sipDomain;
+    if (formData.sipUri !== line.sipUri) payload.sipUri = formData.sipUri;
+
+    if (Object.keys(payload).length <= 2) {
+      toast({ title: "Nenhuma alteração detectada", variant: "destructive" });
+      return;
+    }
+    voipMutation.mutate(payload);
+  };
+
+  const statusColor = line.status === "Up" || line.status === "Registered" || line.status === "InService"
+    ? "text-emerald-500" : line.status === "Registering" ? "text-amber-500" : "text-muted-foreground";
+
+  return (
+    <Card data-testid={`voip-line-${line.profileIndex}-${line.lineIndex}`}>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Phone className="w-4 h-4 text-primary" />
+            Linha {line.index} (Perfil {line.profileIndex} / Porta {line.lineIndex})
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Badge
+              variant={line.enabled ? "default" : "secondary"}
+              className="text-[10px] cursor-pointer"
+              onClick={() => !toggleMutation.isPending && genieId && toggleMutation.mutate(!line.enabled)}
+              data-testid={`badge-voip-toggle-${line.index}`}
+            >
+              {toggleMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+              {line.enabled ? "Habilitada" : "Desabilitada"}
+            </Badge>
+            {line.status && (
+              <Badge variant="outline" className={`text-[10px] ${statusColor}`} data-testid={`badge-voip-status-${line.index}`}>
+                {line.status}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!editing ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+              <div><span className="text-muted-foreground">Número: </span><span className="font-medium">{line.directoryNumber || "-"}</span></div>
+              <div><span className="text-muted-foreground">Auth User: </span><span className="font-medium">{line.sipAuthUser || "-"}</span></div>
+              <div><span className="text-muted-foreground">SIP URI: </span><span className="font-medium">{line.sipUri || "-"}</span></div>
+              <div><span className="text-muted-foreground">Domínio: </span><span className="font-medium">{line.sipDomain || "-"}</span></div>
+              <div className="col-span-2"><span className="text-muted-foreground">Registrar: </span><span className="font-medium">{line.sipRegistrar || "-"}{line.sipRegistrarPort ? `:${line.sipRegistrarPort}` : ""}</span></div>
+              <div className="col-span-2"><span className="text-muted-foreground">Proxy: </span><span className="font-medium">{line.sipProxyServer || "-"}{line.sipProxyPort ? `:${line.sipProxyPort}` : ""}</span></div>
+              {line.sipOutboundProxy && <div className="col-span-2"><span className="text-muted-foreground">Outbound Proxy: </span><span className="font-medium">{line.sipOutboundProxy}{line.sipOutboundProxyPort ? `:${line.sipOutboundProxyPort}` : ""}</span></div>}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)} disabled={!genieId} className="w-full" data-testid={`button-edit-voip-${line.index}`}>
+              <Settings className="w-3.5 h-3.5 mr-1" /> Editar
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Número (Directory)</Label>
+                <Input value={formData.directoryNumber} onChange={(e) => setFormData(p => ({ ...p, directoryNumber: e.target.value }))} placeholder="5511999999999" data-testid={`input-voip-number-${line.index}`} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">SIP URI</Label>
+                <Input value={formData.sipUri} onChange={(e) => setFormData(p => ({ ...p, sipUri: e.target.value }))} placeholder="user@domain.com" data-testid={`input-voip-uri-${line.index}`} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Auth User</Label>
+                <Input value={formData.sipAuthUser} onChange={(e) => setFormData(p => ({ ...p, sipAuthUser: e.target.value }))} placeholder="Usuário SIP" data-testid={`input-voip-auth-user-${line.index}`} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Auth Password</Label>
+                <Input type="password" value={formData.sipAuthPassword} onChange={(e) => setFormData(p => ({ ...p, sipAuthPassword: e.target.value }))} placeholder="Senha SIP" data-testid={`input-voip-auth-pass-${line.index}`} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Registrar Server</Label>
+                <Input value={formData.sipRegistrar} onChange={(e) => setFormData(p => ({ ...p, sipRegistrar: e.target.value }))} placeholder="sip.provedor.com" data-testid={`input-voip-registrar-${line.index}`} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Registrar Port</Label>
+                <Input value={formData.sipRegistrarPort} onChange={(e) => setFormData(p => ({ ...p, sipRegistrarPort: e.target.value }))} placeholder="5060" data-testid={`input-voip-registrar-port-${line.index}`} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Proxy Server</Label>
+                <Input value={formData.sipProxyServer} onChange={(e) => setFormData(p => ({ ...p, sipProxyServer: e.target.value }))} placeholder="proxy.provedor.com" data-testid={`input-voip-proxy-${line.index}`} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Proxy Port</Label>
+                <Input value={formData.sipProxyPort} onChange={(e) => setFormData(p => ({ ...p, sipProxyPort: e.target.value }))} placeholder="5060" data-testid={`input-voip-proxy-port-${line.index}`} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Outbound Proxy</Label>
+                <Input value={formData.sipOutboundProxy} onChange={(e) => setFormData(p => ({ ...p, sipOutboundProxy: e.target.value }))} placeholder="outbound.provedor.com" data-testid={`input-voip-outbound-${line.index}`} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Outbound Port</Label>
+                <Input value={formData.sipOutboundProxyPort} onChange={(e) => setFormData(p => ({ ...p, sipOutboundProxyPort: e.target.value }))} placeholder="5060" data-testid={`input-voip-outbound-port-${line.index}`} />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Domínio (User Agent Domain)</Label>
+                <Input value={formData.sipDomain} onChange={(e) => setFormData(p => ({ ...p, sipDomain: e.target.value }))} placeholder="dominio.com" data-testid={`input-voip-domain-${line.index}`} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={voipMutation.isPending} className="flex-1" data-testid={`button-save-voip-${line.index}`}>
+                {voipMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                Salvar VoIP
+              </Button>
+              <Button variant="outline" onClick={() => setEditing(false)} disabled={voipMutation.isPending} data-testid={`button-cancel-voip-${line.index}`}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function DeviceDetail() {
@@ -783,40 +994,30 @@ export default function DeviceDetail() {
               </TabsContent>
 
               <TabsContent value="voip" className="space-y-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-1"><Phone className="w-4 h-4 text-primary" /> Linhas VoIP</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {voipLines.length > 0 ? (
-                      <div className="space-y-3">
-                        {voipLines.map((line) => (
-                          <div key={line.index} className="p-3 rounded-lg border bg-muted/30 space-y-2" data-testid={`voip-line-${line.index}`}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Phone className="w-4 h-4 text-primary" />
-                                <span className="text-sm font-medium">Linha {line.index}</span>
-                              </div>
-                              <Badge variant={line.enabled ? "default" : "secondary"} className="text-[10px]">{line.enabled ? "Habilitada" : "Desabilitada"}</Badge>
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                              {line.directoryNumber && <div><span className="text-muted-foreground">Número: </span><span className="font-medium">{line.directoryNumber}</span></div>}
-                              {line.status && <div><span className="text-muted-foreground">Status: </span><span className="font-medium">{line.status}</span></div>}
-                              {line.sipUri && <div><span className="text-muted-foreground">SIP URI: </span><span className="font-medium">{line.sipUri}</span></div>}
-                              {line.sipRegistrar && <div><span className="text-muted-foreground">Registrar: </span><span className="font-medium">{line.sipRegistrar}</span></div>}
-                              {line.sipAuthUser && <div><span className="text-muted-foreground">Auth User: </span><span className="font-medium">{line.sipAuthUser}</span></div>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
+                {voipLines.length > 0 ? (
+                  voipLines.map((line) => (
+                    <VoipLineCard
+                      key={`${line.profileIndex}-${line.lineIndex}`}
+                      line={line}
+                      deviceId={params?.id || ""}
+                      genieId={device.genieId || ""}
+                      liveLoading={liveLoading}
+                    />
+                  ))
+                ) : (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-1"><Phone className="w-4 h-4 text-primary" /> Linhas VoIP</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                       <div className="text-center py-6 text-muted-foreground">
                         <Phone className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">{liveLoading ? "Carregando..." : "Nenhuma linha VoIP configurada"}</p>
+                        <p className="text-sm">{liveLoading ? "Carregando dados VoIP..." : "Nenhuma linha VoIP encontrada"}</p>
+                        <p className="text-xs mt-1 text-muted-foreground/70">Os dados VoIP serão coletados no próximo inform do dispositivo</p>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
 
               <TabsContent value="diag" className="space-y-4">
