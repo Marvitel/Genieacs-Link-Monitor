@@ -343,6 +343,63 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/devices/:id/lan-config", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const lanSchema = z.object({
+      lanIp: z.string().optional(),
+      lanSubnet: z.string().optional(),
+      dhcpEnabled: z.boolean().optional(),
+      dhcpStart: z.string().optional(),
+      dhcpEnd: z.string().optional(),
+    });
+    const parsed = lanSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    const igd = "InternetGatewayDevice";
+    const parameters: Array<[string, string | number | boolean]> = [];
+    const changes: string[] = [];
+
+    if (parsed.data.lanIp) {
+      parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress`, parsed.data.lanIp]);
+      changes.push(`IP: ${parsed.data.lanIp}`);
+    }
+    if (parsed.data.lanSubnet) {
+      parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceSubnetMask`, parsed.data.lanSubnet]);
+      parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.SubnetMask`, parsed.data.lanSubnet]);
+      changes.push(`Máscara: ${parsed.data.lanSubnet}`);
+    }
+    if (parsed.data.dhcpEnabled !== undefined) {
+      parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.DHCPServerEnable`, parsed.data.dhcpEnabled]);
+      changes.push(`DHCP: ${parsed.data.dhcpEnabled ? "Habilitado" : "Desabilitado"}`);
+    }
+    if (parsed.data.dhcpStart) {
+      parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.MinAddress`, parsed.data.dhcpStart]);
+      changes.push(`DHCP início: ${parsed.data.dhcpStart}`);
+    }
+    if (parsed.data.dhcpEnd) {
+      parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.MaxAddress`, parsed.data.dhcpEnd]);
+      changes.push(`DHCP fim: ${parsed.data.dhcpEnd}`);
+    }
+
+    if (parameters.length === 0) return res.status(400).json({ message: "Nenhum parâmetro informado" });
+
+    try {
+      await genieSetMultipleParameters(device.genieId, parameters);
+      await storage.createDeviceLog({
+        deviceId: device.id,
+        eventType: "config-change",
+        message: `LAN atualizado: ${changes.join(", ")}`,
+        severity: "info",
+      });
+      res.json({ message: "Configuração LAN enviada" });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
   app.post("/api/devices/:id/voip-config", async (req, res) => {
     const device = await storage.getDevice(req.params.id);
     if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });

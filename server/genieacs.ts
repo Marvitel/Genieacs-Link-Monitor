@@ -649,6 +649,13 @@ export interface EthernetPort {
   macAddress: string;
   speed: string;
   duplex: string;
+  name: string;
+  txBytes: number;
+  rxBytes: number;
+  txErrors: number;
+  rxErrors: number;
+  txPackets: number;
+  rxPackets: number;
 }
 
 export interface WanConnection {
@@ -874,30 +881,26 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
   const dev = "Device";
 
   const connectedHosts: ConnectedHost[] = [];
-  for (let i = 1; i <= 200; i++) {
-    const hostBase = `${igd}.LANDevice.1.Hosts.Host.${i}`;
-    const mac = getVal(device, `${hostBase}.MACAddress`) as string | null;
-    if (!mac) {
-      const hostBase2 = `${dev}.Hosts.Host.${i}`;
-      const mac2 = getVal(device, `${hostBase2}.MACAddress`) as string | null;
-      if (!mac2) continue;
+  const scanHostRange = (basePath: string, isTR181: boolean) => {
+    for (let i = 1; i <= 2000; i++) {
+      const hostBase = `${basePath}.${i}`;
+      const mac = getVal(device, `${hostBase}.MACAddress`) as string | null;
+      if (!mac) continue;
       connectedHosts.push({
-        hostName: (getVal(device, `${hostBase2}.HostName`) as string) || "*",
-        ipAddress: (getVal(device, `${hostBase2}.IPAddress`) as string) || "",
-        macAddress: mac2,
-        interfaceType: (getVal(device, `${hostBase2}.Layer1Interface`) as string) || "",
-        active: getVal(device, `${hostBase2}.Active`) === true || getVal(device, `${hostBase2}.Active`) === 1,
+        hostName: (getVal(device, `${hostBase}.HostName`) as string) || "*",
+        ipAddress: (getVal(device, `${hostBase}.IPAddress`) as string) || "",
+        macAddress: mac,
+        interfaceType: isTR181
+          ? (getVal(device, `${hostBase}.Layer1Interface`) as string) || ""
+          : (getVal(device, `${hostBase}.InterfaceType`) as string) || "",
+        active: getVal(device, `${hostBase}.Active`) === true || getVal(device, `${hostBase}.Active`) === 1 || getVal(device, `${hostBase}.Active`) === "1",
+        leaseTimeRemaining: (getVal(device, `${hostBase}.LeaseTimeRemaining`) as number | undefined),
       });
-      continue;
     }
-    connectedHosts.push({
-      hostName: (getVal(device, `${hostBase}.HostName`) as string) || "*",
-      ipAddress: (getVal(device, `${hostBase}.IPAddress`) as string) || "",
-      macAddress: mac,
-      interfaceType: (getVal(device, `${hostBase}.InterfaceType`) as string) || "",
-      active: getVal(device, `${hostBase}.Active`) === true || getVal(device, `${hostBase}.Active`) === 1 || getVal(device, `${hostBase}.Active`) === "1",
-      leaseTimeRemaining: getVal(device, `${hostBase}.LeaseTimeRemaining`) as number | undefined,
-    });
+  };
+  scanHostRange(`${igd}.LANDevice.1.Hosts.Host`, false);
+  if (connectedHosts.length === 0) {
+    scanHostRange(`${dev}.Hosts.Host`, true);
   }
 
   const ethernetPorts: EthernetPort[] = [];
@@ -909,12 +912,20 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
     if (status || status2) {
       const base = status ? ethBase : ethBase2;
       const s = (status || status2) as string;
+      const statsBase = `${base}.Stats`;
       ethernetPorts.push({
         index: i,
         status: s,
         macAddress: (getVal(device, `${base}.MACAddress`) as string) || "",
         speed: String(getVal(device, `${base}.MaxBitRate`) || getVal(device, `${base}.CurrentBitRate`) || ""),
         duplex: (getVal(device, `${base}.DuplexMode`) as string) || "",
+        name: (getVal(device, `${base}.Name`) as string) || "",
+        txBytes: (getVal(device, `${statsBase}.BytesSent`) as number) || 0,
+        rxBytes: (getVal(device, `${statsBase}.BytesReceived`) as number) || 0,
+        txErrors: (getVal(device, `${statsBase}.ErrorsSent`) as number) || 0,
+        rxErrors: (getVal(device, `${statsBase}.ErrorsReceived`) as number) || 0,
+        txPackets: (getVal(device, `${statsBase}.PacketsSent`) as number) || 0,
+        rxPackets: (getVal(device, `${statsBase}.PacketsReceived`) as number) || 0,
       });
     }
   }
@@ -1095,20 +1106,39 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
     }
   }
 
-  const lanIp = (firstOf(device,
+  let lanIp = (firstOf(device,
     `${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress`,
     `${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPAddress`,
-    `${dev}.DHCPv4.Server.Pool.1.IPInterface`
   ) as string) || "";
-
-  const lanSubnet = (firstOf(device,
+  let lanSubnet = (firstOf(device,
     `${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceSubnetMask`,
     `${igd}.LANDevice.1.LANHostConfigManagement.SubnetMask`
   ) as string) || "";
+  let dhcpEnabled = getVal(device, `${igd}.LANDevice.1.LANHostConfigManagement.DHCPServerEnable`);
+  let dhcpStart = (getVal(device, `${igd}.LANDevice.1.LANHostConfigManagement.MinAddress`) as string) || "";
+  let dhcpEnd = (getVal(device, `${igd}.LANDevice.1.LANHostConfigManagement.MaxAddress`) as string) || "";
 
-  const dhcpEnabled = getVal(device, `${igd}.LANDevice.1.LANHostConfigManagement.DHCPServerEnable`);
-  const dhcpStart = (getVal(device, `${igd}.LANDevice.1.LANHostConfigManagement.MinAddress`) as string) || "";
-  const dhcpEnd = (getVal(device, `${igd}.LANDevice.1.LANHostConfigManagement.MaxAddress`) as string) || "";
+  if (!lanIp) {
+    for (let i = 1; i <= 10; i++) {
+      const ip = getVal(device, `${dev}.IP.Interface.${i}.IPv4Address.1.IPAddress`) as string | null;
+      const name = getVal(device, `${dev}.IP.Interface.${i}.Name`) as string | null;
+      if (ip && (name?.startsWith("br") || name?.includes("LAN")) && (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172."))) {
+        lanIp = ip;
+        lanSubnet = (getVal(device, `${dev}.IP.Interface.${i}.IPv4Address.1.SubnetMask`) as string) || "";
+        break;
+      }
+    }
+  }
+  if (!dhcpStart) {
+    const pool1 = `${dev}.DHCPv4.Server.Pool.1`;
+    const poolEnable = getVal(device, `${pool1}.Enable`);
+    if (poolEnable !== null) {
+      dhcpEnabled = poolEnable;
+      dhcpStart = (getVal(device, `${pool1}.MinAddress`) as string) || "";
+      dhcpEnd = (getVal(device, `${pool1}.MaxAddress`) as string) || "";
+      if (!lanSubnet) lanSubnet = (getVal(device, `${pool1}.SubnetMask`) as string) || "";
+    }
+  }
 
   const wifiEnabled = getVal(device, `${igd}.LANDevice.1.WLANConfiguration.1.Enable`);
   const wifiEnabled5g = getVal(device, `${igd}.LANDevice.1.WLANConfiguration.5.Enable`) ??

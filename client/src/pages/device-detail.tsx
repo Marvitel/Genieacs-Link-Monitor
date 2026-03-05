@@ -78,6 +78,13 @@ interface EthernetPort {
   macAddress: string;
   speed: string;
   duplex: string;
+  name: string;
+  txBytes: number;
+  rxBytes: number;
+  txErrors: number;
+  rxErrors: number;
+  txPackets: number;
+  rxPackets: number;
 }
 
 interface WanConnection {
@@ -403,6 +410,10 @@ export default function DeviceDetail() {
   const [pppoeUser, setPppoeUser] = useState("");
   const [pppoePass, setPppoePass] = useState("");
   const [pppoeTarget, setPppoeTarget] = useState("");
+  const [lanIpEdit, setLanIpEdit] = useState("");
+  const [lanSubnetEdit, setLanSubnetEdit] = useState("");
+  const [dhcpStartEdit, setDhcpStartEdit] = useState("");
+  const [dhcpEndEdit, setDhcpEndEdit] = useState("");
 
   const { data: device, isLoading } = useQuery<Device>({
     queryKey: ["/api/devices", params?.id],
@@ -429,6 +440,10 @@ export default function DeviceDetail() {
       } else {
         setPppoeUser(liveInfo.pppoeUser || "");
       }
+      setLanIpEdit(liveInfo.lanIp || "");
+      setLanSubnetEdit(liveInfo.lanSubnet || "");
+      setDhcpStartEdit(liveInfo.dhcpStart || "");
+      setDhcpEndEdit(liveInfo.dhcpEnd || "");
     } else if (device) {
       setWifiSsid(device.ssid || "");
       setWifiPassword(device.wifiPassword || "");
@@ -521,6 +536,21 @@ export default function DeviceDetail() {
     },
     onError: (error: Error) => {
       toast({ title: "Erro ao configurar WiFi", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const lanConfigMutation = useMutation({
+    mutationFn: async (data: { lanIp?: string; lanSubnet?: string; dhcpEnabled?: boolean; dhcpStart?: string; dhcpEnd?: string }) => {
+      const res = await apiRequest("POST", `/api/devices/${params?.id}/lan-config`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Configuração LAN enviada" });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices", params?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/device-logs"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao configurar LAN", description: error.message, variant: "destructive" });
     },
   });
 
@@ -892,46 +922,154 @@ export default function DeviceDetail() {
               <TabsContent value="lan" className="space-y-4">
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-1"><Network className="w-4 h-4 text-primary" /> Rede Local</CardTitle>
+                    <CardTitle className="text-sm font-medium flex items-center gap-1"><Network className="w-4 h-4 text-primary" /> Configuração LAN</CardTitle>
                   </CardHeader>
-                  <CardContent className="divide-y divide-border">
-                    <InfoRow label="IP do Gateway" value={liveInfo?.lanIp} icon={Router} />
-                    <InfoRow label="Máscara" value={liveInfo?.lanSubnet} />
-                    <InfoRow label="DHCP" value={liveInfo?.dhcpEnabled ? "Habilitado" : "Desabilitado"} />
-                    <InfoRow label="Range DHCP" value={liveInfo?.dhcpStart && liveInfo?.dhcpEnd ? `${liveInfo.dhcpStart} - ${liveInfo.dhcpEnd}` : null} />
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">IP do Gateway</Label>
+                        <Input value={lanIpEdit} onChange={(e) => setLanIpEdit(e.target.value)} placeholder="192.168.1.1" data-testid="input-lan-ip" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Máscara</Label>
+                        <Input value={lanSubnetEdit} onChange={(e) => setLanSubnetEdit(e.target.value)} placeholder="255.255.255.0" data-testid="input-lan-subnet" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 py-1">
+                      <Badge variant={liveInfo?.dhcpEnabled ? "default" : "secondary"} className="text-[10px]">{liveInfo?.dhcpEnabled ? "DHCP Ativo" : "DHCP Inativo"}</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Início DHCP</Label>
+                        <Input value={dhcpStartEdit} onChange={(e) => setDhcpStartEdit(e.target.value)} placeholder="192.168.1.2" data-testid="input-dhcp-start" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Fim DHCP</Label>
+                        <Input value={dhcpEndEdit} onChange={(e) => setDhcpEndEdit(e.target.value)} placeholder="192.168.1.254" data-testid="input-dhcp-end" />
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const data: Record<string, string | boolean> = {};
+                        if (lanIpEdit && lanIpEdit !== liveInfo?.lanIp) data.lanIp = lanIpEdit;
+                        if (lanSubnetEdit && lanSubnetEdit !== liveInfo?.lanSubnet) data.lanSubnet = lanSubnetEdit;
+                        if (dhcpStartEdit && dhcpStartEdit !== liveInfo?.dhcpStart) data.dhcpStart = dhcpStartEdit;
+                        if (dhcpEndEdit && dhcpEndEdit !== liveInfo?.dhcpEnd) data.dhcpEnd = dhcpEndEdit;
+                        if (Object.keys(data).length === 0) { toast({ title: "Nenhuma alteração", variant: "destructive" }); return; }
+                        lanConfigMutation.mutate(data as any);
+                      }}
+                      disabled={lanConfigMutation.isPending || !device.genieId}
+                      className="w-full"
+                      data-testid="button-save-lan"
+                    >
+                      {lanConfigMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                      Salvar LAN
+                    </Button>
                   </CardContent>
                 </Card>
 
                 {ethernetPorts.length > 0 && (
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium flex items-center gap-1"><Cable className="w-4 h-4 text-primary" /> Portas Ethernet</CardTitle>
+                      <CardTitle className="text-sm font-medium flex items-center gap-1">
+                        <Cable className="w-4 h-4 text-primary" /> Portas Ethernet
+                        {(() => {
+                          const upCount = ethernetPorts.filter(p => p.status === "Up" || p.status === "1").length;
+                          return <Badge variant="secondary" className="ml-1 text-[10px]">{upCount}/{ethernetPorts.length} ativas</Badge>;
+                        })()}
+                      </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Porta</TableHead>
-                            <TableHead className="text-xs">Status</TableHead>
-                            <TableHead className="text-xs">Velocidade</TableHead>
-                            <TableHead className="text-xs">MAC</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {ethernetPorts.map((port) => (
-                            <TableRow key={port.index}>
-                              <TableCell className="text-xs font-medium">ETH {port.index}</TableCell>
-                              <TableCell>
-                                <Badge variant={port.status === "Up" || port.status === "1" ? "default" : "secondary"} className="text-[10px]">
-                                  {port.status === "Up" || port.status === "1" ? "Conectada" : "Desconectada"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-xs">{port.speed || "-"}</TableCell>
-                              <TableCell className="text-xs font-mono">{port.macAddress || "-"}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {ethernetPorts.map((port) => {
+                          const isUp = port.status === "Up" || port.status === "1";
+                          const speedNum = parseInt(port.speed);
+                          const isSlowSpeed = isUp && speedNum > 0 && speedNum <= 100;
+                          const hasErrors = (port.txErrors + port.rxErrors) > 100;
+                          const highTraffic = port.txBytes > 0 || port.rxBytes > 0;
+                          const fmtBytes = (b: number) => {
+                            if (b === 0) return "0 B";
+                            if (b < 1024) return `${b} B`;
+                            if (b < 1048576) return `${(b/1024).toFixed(1)} KB`;
+                            if (b < 1073741824) return `${(b/1048576).toFixed(1)} MB`;
+                            return `${(b/1073741824).toFixed(1)} GB`;
+                          };
+                          return (
+                            <div
+                              key={port.index}
+                              data-testid={`port-card-${port.index}`}
+                              className={`p-3 rounded-lg border-2 transition-colors ${
+                                isUp
+                                  ? hasErrors ? "border-red-500/50 bg-red-500/5" : isSlowSpeed ? "border-yellow-500/50 bg-yellow-500/5" : "border-green-500/50 bg-green-500/5"
+                                  : "border-muted bg-muted/20"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold">ETH {port.index}</span>
+                                <div className={`w-2.5 h-2.5 rounded-full ${isUp ? hasErrors ? "bg-red-500 animate-pulse" : "bg-green-500" : "bg-muted-foreground/30"}`} />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] text-muted-foreground">Status</span>
+                                  <Badge variant={isUp ? "default" : "secondary"} className="text-[10px]">
+                                    {isUp ? "Up" : "NoLink"}
+                                  </Badge>
+                                </div>
+                                {isUp && speedNum > 0 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-muted-foreground">Velocidade</span>
+                                    <span className={`text-[10px] font-medium ${isSlowSpeed ? "text-yellow-500" : "text-green-500"}`}>
+                                      {speedNum >= 1000 ? "1 Gbps" : `${speedNum} Mbps`}
+                                      {isSlowSpeed && " ⚠"}
+                                    </span>
+                                  </div>
+                                )}
+                                {isUp && port.duplex && port.duplex !== "Auto" && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-muted-foreground">Duplex</span>
+                                    <span className={`text-[10px] font-medium ${port.duplex === "Half" ? "text-yellow-500" : ""}`}>{port.duplex}</span>
+                                  </div>
+                                )}
+                                {highTraffic && (
+                                  <>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] text-muted-foreground">TX</span>
+                                      <span className="text-[10px] font-mono">{fmtBytes(port.txBytes)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] text-muted-foreground">RX</span>
+                                      <span className="text-[10px] font-mono">{fmtBytes(port.rxBytes)}</span>
+                                    </div>
+                                  </>
+                                )}
+                                {hasErrors && (
+                                  <div className="mt-1 p-1.5 rounded bg-red-500/10 border border-red-500/30">
+                                    <span className="text-[10px] text-red-400 font-medium">⚠ Erros: TX {port.txErrors} / RX {port.rxErrors}</span>
+                                    <p className="text-[9px] text-red-400/70 mt-0.5">Possível looping ou cabo ruim</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {ethernetPorts.some(p => {
+                        const isUp = p.status === "Up" || p.status === "1";
+                        const speedNum = parseInt(p.speed);
+                        return isUp && speedNum > 0 && speedNum <= 100;
+                      }) && (
+                        <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                          <p className="text-xs text-yellow-400 font-medium">⚠ Velocidade baixa detectada</p>
+                          <p className="text-[10px] text-yellow-400/70">Porta negociando a 10/100 Mbps pode indicar cabo Cat5 danificado, conector mal crimpado ou equipamento legado.</p>
+                        </div>
+                      )}
+                      {ethernetPorts.some(p => (p.txErrors + p.rxErrors) > 100) && (
+                        <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/30">
+                          <p className="text-xs text-red-400 font-medium">⚠ Erros de porta detectados</p>
+                          <p className="text-[10px] text-red-400/70">Alto número de erros pode indicar looping de rede, cabo danificado, interferência eletromagnética ou problema no equipamento conectado.</p>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -997,46 +1135,88 @@ export default function DeviceDetail() {
               </TabsContent>
 
               <TabsContent value="hosts" className="space-y-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-1">
-                      <Laptop className="w-4 h-4 text-primary" />
-                      Dispositivos Conectados
-                      {connectedHosts.length > 0 && <Badge variant="secondary" className="ml-1">{connectedHosts.length}</Badge>}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {connectedHosts.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-xs">Nome</TableHead>
-                              <TableHead className="text-xs">IP</TableHead>
-                              <TableHead className="text-xs">MAC</TableHead>
-                              <TableHead className="text-xs">Interface</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {connectedHosts.map((host, i) => (
-                              <TableRow key={i} data-testid={`host-row-${i}`}>
-                                <TableCell className="text-xs font-medium">{host.hostName === "*" ? "-" : host.hostName}</TableCell>
-                                <TableCell className="text-xs font-mono">{host.ipAddress}</TableCell>
-                                <TableCell className="text-xs font-mono">{host.macAddress}</TableCell>
-                                <TableCell className="text-xs">{host.interfaceType || "-"}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : (
-                      <div className="text-center py-6 text-muted-foreground">
-                        <Laptop className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">{liveLoading ? "Carregando..." : "Nenhum dispositivo conectado encontrado"}</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                {(() => {
+                  const wifiHosts = connectedHosts.filter(h => {
+                    const t = h.interfaceType?.toLowerCase() || "";
+                    return t.includes("wifi") || t.includes("wlan") || t.includes("802.11") || t.includes("wireless");
+                  });
+                  const ethHosts = connectedHosts.filter(h => {
+                    const t = h.interfaceType?.toLowerCase() || "";
+                    return t.includes("ethernet") || t.includes("eth") || t.includes("lan");
+                  });
+                  const otherHosts = connectedHosts.filter(h => !wifiHosts.includes(h) && !ethHosts.includes(h));
+                  return (
+                    <>
+                      {connectedHosts.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="p-3 rounded-lg border bg-card text-center">
+                            <p className="text-2xl font-bold">{connectedHosts.length}</p>
+                            <p className="text-[10px] text-muted-foreground">Total</p>
+                          </div>
+                          <div className="p-3 rounded-lg border bg-card text-center">
+                            <p className="text-2xl font-bold text-blue-400">{wifiHosts.length || "?"}</p>
+                            <p className="text-[10px] text-muted-foreground">WiFi</p>
+                          </div>
+                          <div className="p-3 rounded-lg border bg-card text-center">
+                            <p className="text-2xl font-bold text-green-400">{ethHosts.length || "?"}</p>
+                            <p className="text-[10px] text-muted-foreground">Ethernet</p>
+                          </div>
+                        </div>
+                      )}
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium flex items-center gap-1">
+                            <Laptop className="w-4 h-4 text-primary" />
+                            Dispositivos Conectados
+                            {connectedHosts.length > 0 && <Badge variant="secondary" className="ml-1">{connectedHosts.length}</Badge>}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {connectedHosts.length > 0 ? (
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="text-xs">Nome</TableHead>
+                                    <TableHead className="text-xs">IP</TableHead>
+                                    <TableHead className="text-xs">MAC</TableHead>
+                                    <TableHead className="text-xs">Interface</TableHead>
+                                    <TableHead className="text-xs">Status</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {connectedHosts.map((host, i) => (
+                                    <TableRow key={i} data-testid={`host-row-${i}`} className={host.active === false ? "opacity-50" : ""}>
+                                      <TableCell className="text-xs font-medium">{host.hostName === "*" ? "-" : host.hostName}</TableCell>
+                                      <TableCell className="text-xs font-mono">{host.ipAddress}</TableCell>
+                                      <TableCell className="text-xs font-mono">{host.macAddress}</TableCell>
+                                      <TableCell className="text-xs">
+                                        {(() => {
+                                          const t = (host.interfaceType || "").toLowerCase();
+                                          if (t.includes("wifi") || t.includes("wlan") || t.includes("802.11") || t.includes("wireless")) return <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-400">WiFi</Badge>;
+                                          if (t.includes("ethernet") || t.includes("eth") || t.includes("lan")) return <Badge variant="outline" className="text-[10px] border-green-500/50 text-green-400">Ethernet</Badge>;
+                                          return <span className="text-muted-foreground">{host.interfaceType || "-"}</span>;
+                                        })()}
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className={`w-2 h-2 rounded-full ${host.active !== false ? "bg-green-500" : "bg-muted-foreground/30"}`} />
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 text-muted-foreground">
+                              <Laptop className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                              <p className="text-sm">{liveLoading ? "Carregando..." : "Nenhum dispositivo conectado encontrado"}</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </>
+                  );
+                })()}
               </TabsContent>
 
               <TabsContent value="voip" className="space-y-4">
