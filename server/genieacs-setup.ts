@@ -390,6 +390,7 @@ const PRESETS: Record<string, GeniePreset> = {
     configurations: [
       { type: "provision", name: "inform" },
       { type: "provision", name: "netcontrol-inform" },
+      { type: "provision", name: "netcontrol-wan" },
       { type: "provision", name: "netcontrol-pon" },
       { type: "provision", name: "netcontrol-voip" },
     ],
