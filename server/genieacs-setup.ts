@@ -53,6 +53,8 @@ declare("InternetGatewayDevice.DeviceInfo.Manufacturer", {value: now});
 declare("InternetGatewayDevice.DeviceInfo.ModelName", {value: now});
 declare("InternetGatewayDevice.DeviceInfo.SerialNumber", {value: now});
 declare("InternetGatewayDevice.DeviceInfo.Description", {value: now});
+declare("InternetGatewayDevice.DeviceInfo.MemoryStatus.Free", {value: now});
+declare("InternetGatewayDevice.DeviceInfo.ProcessStatus.CPUUsage", {value: now});
 
 // TR-181 (Device:2)
 declare("Device.DeviceInfo.SoftwareVersion", {value: now});
@@ -61,26 +63,40 @@ declare("Device.DeviceInfo.UpTime", {value: now});
 declare("Device.DeviceInfo.Manufacturer", {value: now});
 declare("Device.DeviceInfo.ModelName", {value: now});
 declare("Device.DeviceInfo.SerialNumber", {value: now});
+declare("Device.DeviceInfo.MemoryStatus.Free", {value: now});
+declare("Device.DeviceInfo.ProcessStatus.CPUUsage", {value: now});
 `,
 
   "netcontrol-wan": `
 const now = Date.now();
 
-// WAN IP Connection (TR-098)
-declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*", {value: now});
+// WAN IP Connection (TR-098) - descobrir todos os sub-objetos
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*", {path: now, value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.ExternalIPAddress", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.MACAddress", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.ConnectionStatus", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.SubnetMask", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.DefaultGateway", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.DNSServers", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Name", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.NATEnabled", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.Uptime", {value: now});
 
 // WAN PPP Connection (TR-098)
-declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*", {path: now, value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Username", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.ExternalIPAddress", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.ConnectionStatus", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.MACAddress", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.SubnetMask", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.DefaultGateway", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.DNSServers", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Name", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Uptime", {value: now});
 
 // TR-181 (Device:2) IP interface
-declare("Device.IP.Interface.*", {value: now});
-declare("Device.PPP.Interface.*", {value: now});
+declare("Device.IP.Interface.*", {path: now, value: now});
+declare("Device.PPP.Interface.*", {path: now, value: now});
 `,
 
   "netcontrol-wifi": `
@@ -94,38 +110,67 @@ declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.Standard", {value
 declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.BeaconType", {value: now});
 declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.WPAEncryptionModes", {value: now});
 declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.TotalAssociations", {value: now});
+declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.KeyPassphrase", {path: now, value: 1});
+declare("InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.PreSharedKey.1.KeyPassphrase", {path: now, value: 1});
 
 // Wi-Fi (TR-181 Device:2)
 declare("Device.WiFi.Radio.*", {value: now});
 declare("Device.WiFi.SSID.*", {value: now});
 declare("Device.WiFi.AccessPoint.*", {value: now});
+declare("Device.WiFi.AccessPoint.*.Security.KeyPassphrase", {path: now, value: 1});
 declare("Device.WiFi.AccessPoint.*.AssociatedDevice.*", {value: now});
 `,
 
   "netcontrol-pon": `
 const now = Date.now();
 
-// Sinal óptico GPON - Caminhos comuns por fabricante
-// Huawei / ZTE / Fiberhome / Parks / Intelbras
+// Descobrir tree de dados PON/GPON - path discovery com {path: now}
+// Isso força o GenieACS a fazer getParameterNames para cada path
+
+// Intelbras (121AC, AX1800V, etc) - usa X_GponInterfaceConfig SEM índice
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.*", {path: now, value: now});
+
+// Intelbras - typo comum em firmwares mais antigos
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.*", {path: now, value: now});
+
+// ZTE (F6600P, etc)
+declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.*", {path: now, value: now});
+
+// Huawei (EG8145V5, etc) - usa X_HW_
+declare("InternetGatewayDevice.WANDevice.1.X_HW_GponInterfaceConfig.*", {path: now, value: now});
+
+// Datacom (DM985, etc)
+declare("InternetGatewayDevice.WANDevice.1.X_DATACOM_GponInterfaceConfig.*", {path: now, value: now});
+
+// TP-Link (XX530v, etc) - pode usar Device.Optical ou IGD
+declare("InternetGatewayDevice.WANDevice.1.X_TP_GponInterfaceConfig.*", {path: now, value: now});
+declare("Device.Optical.*", {path: now, value: now});
+declare("Device.Optical.Interface.*", {path: now, value: now});
+declare("Device.Optical.Interface.1.Stats.*", {path: now, value: now});
+
+// China Telecom paths
+declare("InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.*", {path: now, value: now});
+
+// Nokia / Alcatel-Lucent
+declare("InternetGatewayDevice.WANDevice.1.X_ALU_GponInterfaceConfig.*", {path: now, value: now});
+
+// Paths genéricos sem prefixo de fabricante
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.*", {path: now, value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.RXPower", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.TXPower", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.Temperature", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.Voltage", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.RXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.Temperature", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.Voltage", {value: now});
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.BiasCurrent", {value: now});
-
-// Variação com typo comum em firmwares (X_GponInterafceConfig)
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.RXPower", {value: now});
-declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TXPower", {value: now});
-
-// Caminhos alternativos (variações de fabricantes)
-declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.RXPower", {value: now});
-declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.TXPower", {value: now});
-declare("InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.RXPower", {value: now});
-declare("InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.TXPower", {value: now});
 
 // Temperatura do dispositivo
-declare("InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.*.Value", {value: now});
-declare("InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.*.Status", {value: now});
+declare("InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.*", {path: now, value: now});
+
+// Ethernet Interface Config para status das portas
+declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.*", {path: now, value: now});
+declare("Device.Ethernet.Interface.*", {path: now, value: now});
 `,
 
   "netcontrol-lan": `

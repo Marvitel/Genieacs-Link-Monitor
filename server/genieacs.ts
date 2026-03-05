@@ -183,6 +183,42 @@ export async function genieRefreshDevice(deviceId: string, objectPath: string = 
   return true;
 }
 
+export async function genieRefreshFullDevice(deviceId: string): Promise<{ tasks: string[]; errors: string[] }> {
+  const tasks: string[] = [];
+  const errors: string[] = [];
+
+  const pathGroups = [
+    ["InternetGatewayDevice.DeviceInfo.", "Device.DeviceInfo."],
+    ["InternetGatewayDevice.WANDevice.", "Device.IP.", "Device.PPP."],
+    ["InternetGatewayDevice.LANDevice.", "Device.Hosts.", "Device.Ethernet."],
+    ["InternetGatewayDevice.Services.", "Device.Services."],
+  ];
+
+  for (const group of pathGroups) {
+    try {
+      const task = {
+        name: "getParameterValues",
+        parameterNames: group,
+      };
+      const url = `${GENIEACS_NBI_URL}/devices/${encodeURIComponent(deviceId)}/tasks?connection_request`;
+      const res = await genieFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(task),
+      });
+      if (res.ok || res.status === 202) {
+        tasks.push(group.join(", "));
+      } else {
+        errors.push(`${group.join(", ")}: status ${res.status}`);
+      }
+    } catch (err: unknown) {
+      errors.push(`${group.join(", ")}: ${err instanceof Error ? err.message : "erro"}`);
+    }
+  }
+
+  return { tasks, errors };
+}
+
 export async function genieRunDiagnostic(
   deviceId: string,
   diagnosticType: "ping" | "traceroute" | "download" | "upload",
@@ -442,34 +478,66 @@ export function extractDeviceInfo(device: GenieACSDevice) {
   ) as string || "";
 
   const rxPower = firstOf(device,
+    `${igd}.WANDevice.1.X_GponInterfaceConfig.RXPower`,
     `${igd}.WANDevice.1.X_GponInterfaceConfig.1.RXPower`,
+    `${igd}.WANDevice.1.X_GponInterafceConfig.RXPower`,
     `${igd}.WANDevice.1.X_GponInterafceConfig.1.RXPower`,
-    `${igd}.X_GponInterfaceConfig.1.RXPower`,
-    `${igd}.X_GponInterafceConfig.1.RXPower`,
-    `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.RXPower`
+    `${igd}.WANDevice.1.GponInterfaceConfig.RXPower`,
+    `${igd}.WANDevice.1.GponInterfaceConfig.1.RXPower`,
+    `${igd}.WANDevice.1.X_HW_GponInterfaceConfig.RXPower`,
+    `${igd}.WANDevice.1.X_DATACOM_GponInterfaceConfig.RXPower`,
+    `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.RXPower`,
+    `${igd}.WANDevice.1.X_ALU_GponInterfaceConfig.RXPower`,
+    `${igd}.X_CT-COM_GponInterfaceConfig.RXPower`,
+    `${igd}.X_GponInterfaceConfig.RXPower`,
+    `${igd}.X_GponInterfaceConfig.1.RXPower`
   ) as number | null;
 
   const txPower = firstOf(device,
+    `${igd}.WANDevice.1.X_GponInterfaceConfig.TXPower`,
     `${igd}.WANDevice.1.X_GponInterfaceConfig.1.TXPower`,
+    `${igd}.WANDevice.1.X_GponInterafceConfig.TXPower`,
     `${igd}.WANDevice.1.X_GponInterafceConfig.1.TXPower`,
-    `${igd}.X_GponInterfaceConfig.1.TXPower`,
-    `${igd}.X_GponInterafceConfig.1.TXPower`,
-    `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.TXPower`
+    `${igd}.WANDevice.1.GponInterfaceConfig.TXPower`,
+    `${igd}.WANDevice.1.GponInterfaceConfig.1.TXPower`,
+    `${igd}.WANDevice.1.X_HW_GponInterfaceConfig.TXPower`,
+    `${igd}.WANDevice.1.X_DATACOM_GponInterfaceConfig.TXPower`,
+    `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.TXPower`,
+    `${igd}.WANDevice.1.X_ALU_GponInterfaceConfig.TXPower`,
+    `${igd}.X_CT-COM_GponInterfaceConfig.TXPower`,
+    `${igd}.X_GponInterfaceConfig.TXPower`,
+    `${igd}.X_GponInterfaceConfig.1.TXPower`
   ) as number | null;
 
   const temperature = firstOf(device,
     `${igd}.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value`,
+    `${igd}.WANDevice.1.X_GponInterfaceConfig.Temperature`,
     `${igd}.WANDevice.1.X_GponInterfaceConfig.1.Temperature`,
+    `${igd}.WANDevice.1.X_GponInterafceConfig.Temperature`,
     `${igd}.WANDevice.1.X_GponInterafceConfig.1.Temperature`,
-    `${igd}.X_GponInterfaceConfig.1.Temperature`,
-    `${igd}.X_GponInterafceConfig.1.Temperature`
+    `${igd}.WANDevice.1.GponInterfaceConfig.Temperature`,
+    `${igd}.WANDevice.1.GponInterfaceConfig.1.Temperature`,
+    `${igd}.WANDevice.1.X_HW_GponInterfaceConfig.Temperature`,
+    `${igd}.WANDevice.1.X_DATACOM_GponInterfaceConfig.Temperature`,
+    `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.Temperature`,
+    `${igd}.X_CT-COM_GponInterfaceConfig.Temperature`,
+    `${igd}.X_GponInterfaceConfig.Temperature`,
+    `${igd}.X_GponInterfaceConfig.1.Temperature`
   ) as number | null;
 
   const voltage = firstOf(device,
+    `${igd}.WANDevice.1.X_GponInterfaceConfig.Voltage`,
     `${igd}.WANDevice.1.X_GponInterfaceConfig.1.Voltage`,
+    `${igd}.WANDevice.1.X_GponInterafceConfig.Voltage`,
     `${igd}.WANDevice.1.X_GponInterafceConfig.1.Voltage`,
-    `${igd}.X_GponInterfaceConfig.1.Voltage`,
-    `${igd}.X_GponInterafceConfig.1.Voltage`
+    `${igd}.WANDevice.1.GponInterfaceConfig.Voltage`,
+    `${igd}.WANDevice.1.GponInterfaceConfig.1.Voltage`,
+    `${igd}.WANDevice.1.X_HW_GponInterfaceConfig.Voltage`,
+    `${igd}.WANDevice.1.X_DATACOM_GponInterfaceConfig.Voltage`,
+    `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.Voltage`,
+    `${igd}.X_CT-COM_GponInterfaceConfig.Voltage`,
+    `${igd}.X_GponInterfaceConfig.Voltage`,
+    `${igd}.X_GponInterfaceConfig.1.Voltage`
   ) as number | null;
 
   const connectionType = pppoeUser ? "PPPoE" : (ipAddress ? "DHCP" : "");
@@ -581,6 +649,79 @@ export interface DeviceLiveInfo {
   dhcpEnd: string;
   memoryUsage: number | null;
   cpuUsage: number | null;
+}
+
+function findPonData(device: GenieACSDevice): { rxPower: number | null; txPower: number | null; temperature: number | null; voltage: number | null } {
+  const result = { rxPower: null as number | null, txPower: null as number | null, temperature: null as number | null, voltage: null as number | null };
+
+  const igd = (device as Record<string, unknown>)["InternetGatewayDevice"] as Record<string, unknown> | undefined;
+  if (!igd) return result;
+
+  const wanDevice1 = (igd["WANDevice"] as Record<string, unknown>)?.["1"] as Record<string, unknown> | undefined;
+  const searchContainers = [wanDevice1, igd];
+
+  for (const container of searchContainers) {
+    if (!container) continue;
+    for (const [key, val] of Object.entries(container)) {
+      if (key.startsWith("_")) continue;
+      const keyLower = key.toLowerCase();
+      if (!keyLower.includes("gpon") && !keyLower.includes("pon") && !keyLower.includes("optical")) continue;
+
+      const branch = val as Record<string, unknown>;
+      if (!branch || typeof branch !== "object") continue;
+
+      const findInBranch = (obj: Record<string, unknown>) => {
+        for (const [k, v] of Object.entries(obj)) {
+          if (k.startsWith("_")) continue;
+          const vObj = v as Record<string, unknown>;
+          if (!vObj || typeof vObj !== "object") continue;
+
+          if ("_value" in vObj) {
+            const kl = k.toLowerCase();
+            const numVal = Number(vObj._value);
+            if (!isNaN(numVal)) {
+              if (kl === "rxpower" && result.rxPower === null) result.rxPower = numVal;
+              else if (kl === "txpower" && result.txPower === null) result.txPower = numVal;
+              else if (kl === "temperature" && result.temperature === null) result.temperature = numVal;
+              else if (kl === "voltage" && result.voltage === null) result.voltage = numVal;
+            }
+          } else {
+            findInBranch(vObj);
+          }
+        }
+      };
+      findInBranch(branch);
+    }
+  }
+
+  const dev = (device as Record<string, unknown>)["Device"] as Record<string, unknown> | undefined;
+  if (dev) {
+    const optical = dev["Optical"] as Record<string, unknown> | undefined;
+    if (optical) {
+      const findInBranch = (obj: Record<string, unknown>) => {
+        for (const [k, v] of Object.entries(obj)) {
+          if (k.startsWith("_")) continue;
+          const vObj = v as Record<string, unknown>;
+          if (!vObj || typeof vObj !== "object") continue;
+          if ("_value" in vObj) {
+            const kl = k.toLowerCase();
+            const numVal = Number(vObj._value);
+            if (!isNaN(numVal)) {
+              if ((kl === "rxpower" || kl === "receivepower" || kl === "opticalreceivepower") && result.rxPower === null) result.rxPower = numVal;
+              else if ((kl === "txpower" || kl === "transmitpower" || kl === "opticaltransmitpower") && result.txPower === null) result.txPower = numVal;
+              else if (kl === "temperature" && result.temperature === null) result.temperature = numVal;
+              else if (kl === "voltage" && result.voltage === null) result.voltage = numVal;
+            }
+          } else {
+            findInBranch(vObj);
+          }
+        }
+      };
+      findInBranch(optical);
+    }
+  }
+
+  return result;
 }
 
 function collectIndexed(device: GenieACSDevice, basePath: string, maxIndex: number = 20): Record<string, Record<string, string | number | null>> {
@@ -771,8 +912,18 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
     `${dev}.DeviceInfo.ProcessStatus.CPUUsage`
   ) as number | null;
 
+  const ponData = findPonData(device);
+  const finalRxPower = basic.rxPower ?? ponData.rxPower;
+  const finalTxPower = basic.txPower ?? ponData.txPower;
+  const finalTemperature = basic.temperature ?? ponData.temperature;
+  const finalVoltage = basic.voltage ?? ponData.voltage;
+
   return {
     ...basic,
+    rxPower: finalRxPower !== null ? (typeof finalRxPower === 'number' && finalRxPower > 1000 ? finalRxPower / 10000 : finalRxPower) : null,
+    txPower: finalTxPower !== null ? (typeof finalTxPower === 'number' && finalTxPower > 1000 ? finalTxPower / 10000 : finalTxPower) : null,
+    temperature: finalTemperature !== null ? (typeof finalTemperature === 'number' && finalTemperature > 1000 ? finalTemperature / 256 : finalTemperature) : null,
+    voltage: finalVoltage,
     uptime: basic.uptime,
     lastInform: basic.lastInform || "",
     lastBoot: basic.lastBoot || "",

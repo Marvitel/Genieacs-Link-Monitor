@@ -86,13 +86,35 @@ deploy/
 The system creates these provisions and presets automatically via NBI API:
 
 ### Provisions (7 scripts)
-- **netcontrol-inform** - Device info (firmware, uptime, serial, manufacturer)
-- **netcontrol-wan** - WAN IP/PPP connections (IP, MAC, PPPoE user, status)
-- **netcontrol-wifi** - Wi-Fi config (SSID, channel, encryption, clients)
-- **netcontrol-pon** - GPON optical signal (RX/TX power, temperature, voltage)
+- **netcontrol-inform** - Device info (firmware, uptime, serial, manufacturer, memory, CPU)
+- **netcontrol-wan** - WAN IP/PPP connections with full details (IP, MAC, PPPoE user, status, DNS, gateway, subnet, uptime, NAT)
+- **netcontrol-wifi** - Wi-Fi config (SSID, channel, encryption, clients, KeyPassphrase)
+- **netcontrol-pon** - GPON optical signal with dynamic path discovery ({path: now}) for all manufacturers (X_GponInterfaceConfig, GponInterfaceConfig, X_HW_, X_DATACOM_, X_TP_, X_ALU_, X_CT-COM_, Device.Optical). Also collects Ethernet port status
 - **netcontrol-lan** - LAN hosts and DHCP config
 - **netcontrol-diagnostics** - Ping, traceroute, speed diagnostics
 - **netcontrol-set-inform** - Sets periodic inform interval on CPE
+
+### PON Data Discovery
+The extractDeviceInfo uses a dual approach:
+1. Static paths: 13+ paths per metric (RX/TX/Temp/Voltage) covering all known manufacturer prefixes
+2. Dynamic scanner (findPonData): Recursively traverses the device tree looking for any key containing "gpon", "pon", or "optical" and extracts RXPower, TXPower, Temperature, Voltage values regardless of exact path
+
+### Live Device Info (extractLiveDeviceInfo)
+Full real-time device data from GenieACS:
+- Connected hosts (up to 200, TR-098 + TR-181)
+- Ethernet ports (up to 8, status/speed/duplex)
+- WAN connections (PPPoE + IPoE, up to 10 WCDs x 4 connections each)
+- VoIP lines (up to 4)
+- LAN config (gateway IP, subnet, DHCP range)
+- WiFi enabled status (2.4G + 5G)
+- Memory/CPU usage
+
+### Full Device Refresh (genieRefreshFullDevice)
+Sends 4 groups of getParameterValues tasks to force full data refresh:
+- DeviceInfo (IGD + Device)
+- WANDevice + IP/PPP
+- LANDevice + Hosts + Ethernet
+- Services
 
 ### Presets (4 rules)
 - **netcontrol-bootstrap** - Runs all provisions on first connect + sets inform interval

@@ -8,6 +8,7 @@ import {
   genieGetDevice,
   genieRebootDevice,
   genieRefreshDevice,
+  genieRefreshFullDevice,
   genieFactoryReset,
   genieSetDeviceParameter,
   genieSetMultipleParameters,
@@ -196,11 +197,16 @@ export async function registerRoutes(
     if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS. Execute uma sincronização." });
 
     try {
-      await genieRefreshDevice(device.genieId);
+      const result = await genieRefreshFullDevice(device.genieId);
+      res.json({
+        message: `Atualização completa solicitada: ${result.tasks.length} grupos de parâmetros`,
+        tasks: result.tasks,
+        errors: result.errors,
+      });
+      return;
     } catch (error) {
       return handleGenieError(error, res);
     }
-    res.json({ message: "Atualização solicitada" });
   });
 
   app.post("/api/devices/:id/diagnostic", async (req, res) => {
