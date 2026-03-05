@@ -113,7 +113,8 @@ The extractDeviceInfo uses a dual approach:
 - ZTE: X_ZTE-COM_GponInterfaceConfig + X_ZTE-COM_WANPONInterfaceConfig - WANDevice.2
 - TP-Link XX530v/Device2/EX520: Device.Optical.Interface.1.X_TP_GPON_Config (RXPower, TXPower, TransceiverTemperature, SupplyVottage with typo). Values in raw units: RX/TX = 10*log10(value/10000) for dBm, Temp = value/256 for °C, Volt = value/1000 for V
 - Huawei: X_HW_GponInterfaceConfig or via InternetGatewayDevice paths
-- Datacom: No PON signal data via TR-069 (only X_CT-COM_WANGponLinkConfig for link config)
+- Datacom DM985-424: WANDevice.1.X_CT-COM_GponInterfaceConfig (CT-COM namespace). RXPower/TXPower in raw µW*10 (same formula as TP-Link: 10*log10(v/10000) for dBm). TransceiverTemperature already in °C. SupplyVottage (typo) in raw /10000 for V
+- Datacom DM986-414/416: WANDevice.1.X_GponInterafceConfig (same typo as Intelbras) + X_CT-COM_GponInterfaceConfig. Values already in dBm via X_GponInterafceConfig
 - TP-Link: Both TR098 and TR181 trees enabled. OpticalSignalLevel/TransmitOpticalLevel always return 0 (firmware limitation). Real data only via X_TP_GPON_Config proprietary path
 
 ### Live Device Info (extractLiveDeviceInfo)

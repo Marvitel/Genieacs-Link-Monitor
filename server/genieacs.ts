@@ -488,6 +488,7 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${igd}.WANDevice.1.X_DATACOM_GponInterfaceConfig.RXPower`,
     `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.RXPower`,
     `${igd}.WANDevice.1.X_ALU_GponInterfaceConfig.RXPower`,
+    `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.RXPower`,
     `${igd}.X_CT-COM_GponInterfaceConfig.RXPower`,
     `${igd}.X_GponInterfaceConfig.RXPower`,
     `${igd}.X_GponInterfaceConfig.1.RXPower`,
@@ -505,6 +506,7 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${igd}.WANDevice.1.X_DATACOM_GponInterfaceConfig.TXPower`,
     `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.TXPower`,
     `${igd}.WANDevice.1.X_ALU_GponInterfaceConfig.TXPower`,
+    `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.TXPower`,
     `${igd}.X_CT-COM_GponInterfaceConfig.TXPower`,
     `${igd}.X_GponInterfaceConfig.TXPower`,
     `${igd}.X_GponInterfaceConfig.1.TXPower`,
@@ -522,6 +524,7 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${igd}.WANDevice.1.X_HW_GponInterfaceConfig.Temperature`,
     `${igd}.WANDevice.1.X_DATACOM_GponInterfaceConfig.Temperature`,
     `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.Temperature`,
+    `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.TransceiverTemperature`,
     `${igd}.X_CT-COM_GponInterfaceConfig.Temperature`,
     `${igd}.X_GponInterfaceConfig.Temperature`,
     `${igd}.X_GponInterfaceConfig.1.Temperature`,
@@ -538,6 +541,7 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${igd}.WANDevice.1.X_HW_GponInterfaceConfig.Voltage`,
     `${igd}.WANDevice.1.X_DATACOM_GponInterfaceConfig.Voltage`,
     `${igd}.WANDevice.1.X_TP_GponInterfaceConfig.Voltage`,
+    `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.SupplyVottage`,
     `${igd}.X_CT-COM_GponInterfaceConfig.Voltage`,
     `${igd}.X_GponInterfaceConfig.Voltage`,
     `${igd}.X_GponInterfaceConfig.1.Voltage`,
@@ -548,6 +552,11 @@ export function extractDeviceInfo(device: GenieACSDevice) {
   const tpGponTx = getVal(device, `${dev}.Optical.Interface.1.X_TP_GPON_Config.TXPower`) as number | null;
   const tpGponTemp = getVal(device, `${dev}.Optical.Interface.1.X_TP_GPON_Config.TransceiverTemperature`) as number | null;
   const tpGponVolt = getVal(device, `${dev}.Optical.Interface.1.X_TP_GPON_Config.SupplyVottage`) as number | null;
+
+  const ctComRx = getVal(device, `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.RXPower`) as number | null;
+  const ctComTx = getVal(device, `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.TXPower`) as number | null;
+  const ctComTemp = getVal(device, `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.TransceiverTemperature`) as number | null;
+  const ctComVolt = getVal(device, `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.SupplyVottage`) as number | null;
 
   let finalRx = rxPower;
   let finalTx = txPower;
@@ -567,7 +576,36 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     finalVolt = Math.round((tpGponVolt / 1000) * 1000) / 1000;
   }
 
+  if (finalRx === null && ctComRx !== null && ctComRx > 0) {
+    finalRx = Math.round((10 * Math.log10(ctComRx / 10000)) * 100) / 100;
+  }
+  if (finalTx === null && ctComTx !== null && ctComTx > 0) {
+    finalTx = Math.round((10 * Math.log10(ctComTx / 10000)) * 100) / 100;
+  }
+  if (finalTemp === null && ctComTemp !== null) {
+    finalTemp = ctComTemp;
+  }
+  if (finalVolt === null && ctComVolt !== null && ctComVolt > 0) {
+    finalVolt = Math.round((ctComVolt / 10000) * 10000) / 10000;
+  }
+
   const connectionType = pppoeUser ? "PPPoE" : (ipAddress ? "DHCP" : "");
+
+  function convertPonPower(val: number | null): number | null {
+    if (val === null) return null;
+    if (typeof val === 'number' && val > 10) {
+      return Math.round((10 * Math.log10(val / 10000)) * 100) / 100;
+    }
+    return val;
+  }
+
+  function convertVoltage(val: number | null): number | null {
+    if (val === null) return null;
+    if (typeof val === 'number' && val > 1000) {
+      return Math.round((val / 10000) * 10000) / 10000;
+    }
+    return val;
+  }
 
   return {
     genieId: device._id,
@@ -589,10 +627,10 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     wifiPassword5g,
     pppoeUser,
     connectionType,
-    rxPower: finalRx !== null ? (typeof finalRx === 'number' && finalRx > 1000 ? finalRx / 10000 : finalRx) : null,
-    txPower: finalTx !== null ? (typeof finalTx === 'number' && finalTx > 1000 ? finalTx / 10000 : finalTx) : null,
+    rxPower: convertPonPower(finalRx),
+    txPower: convertPonPower(finalTx),
     temperature: finalTemp !== null ? (typeof finalTemp === 'number' && finalTemp > 1000 ? finalTemp / 256 : finalTemp) : null,
-    voltage: finalVolt,
+    voltage: convertVoltage(finalVolt),
   };
 }
 
