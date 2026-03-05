@@ -501,6 +501,297 @@ export function extractDeviceInfo(device: GenieACSDevice) {
   };
 }
 
+export interface ConnectedHost {
+  hostName: string;
+  ipAddress: string;
+  macAddress: string;
+  interfaceType?: string;
+  active?: boolean;
+  leaseTimeRemaining?: number;
+}
+
+export interface EthernetPort {
+  index: number;
+  status: string;
+  macAddress: string;
+  speed: string;
+  duplex: string;
+}
+
+export interface WanConnection {
+  index: number;
+  name: string;
+  type: string;
+  ipAddress: string;
+  macAddress: string;
+  subnetMask: string;
+  defaultGateway: string;
+  dnsServers: string;
+  status: string;
+  username: string;
+  uptime: number;
+  natEnabled: boolean;
+  vlanId: string;
+}
+
+export interface VoipLine {
+  index: number;
+  enabled: boolean;
+  directoryNumber: string;
+  status: string;
+  sipUri: string;
+  sipRegistrar: string;
+  sipAuthUser: string;
+}
+
+export interface DeviceLiveInfo {
+  genieId: string;
+  manufacturer: string;
+  serialNumber: string;
+  model: string;
+  firmwareVersion: string;
+  hardwareVersion: string;
+  uptime: number;
+  lastInform: string;
+  lastBoot: string;
+  macAddress: string;
+  ipAddress: string;
+  rxPower: number | null;
+  txPower: number | null;
+  temperature: number | null;
+  voltage: number | null;
+  ssid: string;
+  ssid5g: string;
+  wifiPassword: string;
+  wifiPassword5g: string;
+  wifiChannel: string;
+  wifiChannel5g: string;
+  wifiEnabled: boolean;
+  wifiEnabled5g: boolean;
+  pppoeUser: string;
+  connectionType: string;
+  connectedHosts: ConnectedHost[];
+  ethernetPorts: EthernetPort[];
+  wanConnections: WanConnection[];
+  voipLines: VoipLine[];
+  lanIp: string;
+  lanSubnet: string;
+  dhcpEnabled: boolean;
+  dhcpStart: string;
+  dhcpEnd: string;
+  memoryUsage: number | null;
+  cpuUsage: number | null;
+}
+
+function collectIndexed(device: GenieACSDevice, basePath: string, maxIndex: number = 20): Record<string, Record<string, string | number | null>> {
+  const result: Record<string, Record<string, string | number | null>> = {};
+  for (let i = 1; i <= maxIndex; i++) {
+    const prefix = `${basePath}.${i}`;
+    const testVal = getVal(device, prefix);
+    const obj: Record<string, string | number | null> = {};
+    const parts = basePath.split(".");
+    let parent: unknown = device;
+    for (const part of [...parts, String(i)]) {
+      if (parent && typeof parent === "object" && part in parent) {
+        parent = (parent as Record<string, unknown>)[part];
+      } else {
+        parent = null;
+        break;
+      }
+    }
+    if (!parent || typeof parent !== "object") continue;
+    for (const [k, v] of Object.entries(parent as Record<string, unknown>)) {
+      if (k.startsWith("_")) continue;
+      if (v && typeof v === "object" && "_value" in (v as Record<string, unknown>)) {
+        const val = (v as Record<string, unknown>)["_value"];
+        if (typeof val === "string" || typeof val === "number") {
+          obj[k] = val;
+        }
+      }
+    }
+    if (Object.keys(obj).length > 0) {
+      result[String(i)] = obj;
+    }
+  }
+  return result;
+}
+
+export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
+  const basic = extractDeviceInfo(device);
+  const igd = "InternetGatewayDevice";
+  const dev = "Device";
+
+  const connectedHosts: ConnectedHost[] = [];
+  for (let i = 1; i <= 200; i++) {
+    const hostBase = `${igd}.LANDevice.1.Hosts.Host.${i}`;
+    const mac = getVal(device, `${hostBase}.MACAddress`) as string | null;
+    if (!mac) {
+      const hostBase2 = `${dev}.Hosts.Host.${i}`;
+      const mac2 = getVal(device, `${hostBase2}.MACAddress`) as string | null;
+      if (!mac2) continue;
+      connectedHosts.push({
+        hostName: (getVal(device, `${hostBase2}.HostName`) as string) || "*",
+        ipAddress: (getVal(device, `${hostBase2}.IPAddress`) as string) || "",
+        macAddress: mac2,
+        interfaceType: (getVal(device, `${hostBase2}.Layer1Interface`) as string) || "",
+        active: getVal(device, `${hostBase2}.Active`) === true || getVal(device, `${hostBase2}.Active`) === 1,
+      });
+      continue;
+    }
+    connectedHosts.push({
+      hostName: (getVal(device, `${hostBase}.HostName`) as string) || "*",
+      ipAddress: (getVal(device, `${hostBase}.IPAddress`) as string) || "",
+      macAddress: mac,
+      interfaceType: (getVal(device, `${hostBase}.InterfaceType`) as string) || "",
+      active: getVal(device, `${hostBase}.Active`) === true || getVal(device, `${hostBase}.Active`) === 1 || getVal(device, `${hostBase}.Active`) === "1",
+      leaseTimeRemaining: getVal(device, `${hostBase}.LeaseTimeRemaining`) as number | undefined,
+    });
+  }
+
+  const ethernetPorts: EthernetPort[] = [];
+  for (let i = 1; i <= 8; i++) {
+    const ethBase = `${igd}.LANDevice.1.LANEthernetInterfaceConfig.${i}`;
+    const status = getVal(device, `${ethBase}.Status`) as string | null;
+    const ethBase2 = `${dev}.Ethernet.Interface.${i}`;
+    const status2 = getVal(device, `${ethBase2}.Status`) as string | null;
+    if (status || status2) {
+      const base = status ? ethBase : ethBase2;
+      const s = (status || status2) as string;
+      ethernetPorts.push({
+        index: i,
+        status: s,
+        macAddress: (getVal(device, `${base}.MACAddress`) as string) || "",
+        speed: String(getVal(device, `${base}.MaxBitRate`) || getVal(device, `${base}.CurrentBitRate`) || ""),
+        duplex: (getVal(device, `${base}.DuplexMode`) as string) || "",
+      });
+    }
+  }
+
+  const wanConnections: WanConnection[] = [];
+  for (let wcd = 1; wcd <= 10; wcd++) {
+    for (const connType of ["WANPPPConnection", "WANIPConnection"]) {
+      for (let ci = 1; ci <= 4; ci++) {
+        const wanBase = `${igd}.WANDevice.1.WANConnectionDevice.${wcd}.${connType}.${ci}`;
+        const ip = getVal(device, `${wanBase}.ExternalIPAddress`) as string | null;
+        const name = getVal(device, `${wanBase}.Name`) as string | null;
+        if (ip || name) {
+          wanConnections.push({
+            index: wanConnections.length + 1,
+            name: (name || `WAN ${wcd}`) as string,
+            type: connType === "WANPPPConnection" ? "PPPoE" : "IPoE/DHCP",
+            ipAddress: ip || "",
+            macAddress: (getVal(device, `${wanBase}.MACAddress`) as string) || "",
+            subnetMask: (getVal(device, `${wanBase}.SubnetMask`) as string) || "",
+            defaultGateway: (getVal(device, `${wanBase}.DefaultGateway`) as string) || "",
+            dnsServers: (getVal(device, `${wanBase}.DNSServers`) as string) || "",
+            status: (getVal(device, `${wanBase}.ConnectionStatus`) as string) || "",
+            username: connType === "WANPPPConnection" ? ((getVal(device, `${wanBase}.Username`) as string) || "") : "",
+            uptime: (getVal(device, `${wanBase}.Uptime`) as number) || 0,
+            natEnabled: getVal(device, `${wanBase}.NATEnabled`) === true || getVal(device, `${wanBase}.NATEnabled`) === 1 || getVal(device, `${wanBase}.NATEnabled`) === "1",
+            vlanId: String(getVal(device, `${wanBase}.X_VLAN_ID`) || getVal(device, `${wanBase}.X_CT-COM_WANConnectionDevice.VLANIDMark`) || ""),
+          });
+        }
+      }
+    }
+  }
+  if (wanConnections.length === 0) {
+    for (let i = 1; i <= 10; i++) {
+      const ipBase = `${dev}.IP.Interface.${i}`;
+      const ip = getVal(device, `${ipBase}.IPv4Address.1.IPAddress`) as string | null;
+      if (ip) {
+        wanConnections.push({
+          index: wanConnections.length + 1,
+          name: (getVal(device, `${ipBase}.Name`) as string) || `Interface ${i}`,
+          type: "IPoE/DHCP",
+          ipAddress: ip,
+          macAddress: "",
+          subnetMask: (getVal(device, `${ipBase}.IPv4Address.1.SubnetMask`) as string) || "",
+          defaultGateway: "",
+          dnsServers: "",
+          status: (getVal(device, `${ipBase}.Status`) as string) || "",
+          username: "",
+          uptime: 0,
+          natEnabled: false,
+          vlanId: "",
+        });
+      }
+    }
+  }
+
+  const voipLines: VoipLine[] = [];
+  for (let i = 1; i <= 4; i++) {
+    const voipBase1 = `${igd}.Services.VoiceService.1.VoiceProfile.1.Line.${i}`;
+    const voipBase2 = `${igd}.Services.VoiceService.1.VoiceProfile.${i}.Line.1`;
+    for (const voipBase of [voipBase1, voipBase2]) {
+      const dirNum = getVal(device, `${voipBase}.DirectoryNumber`) as string | null;
+      const sipUri = getVal(device, `${voipBase}.SIP.URI`) as string | null;
+      const enabled = getVal(device, `${voipBase}.Enable`);
+      if (dirNum || sipUri || enabled !== null) {
+        voipLines.push({
+          index: i,
+          enabled: enabled === true || enabled === 1 || enabled === "Enabled" || enabled === "1",
+          directoryNumber: dirNum || "",
+          status: (getVal(device, `${voipBase}.Status`) as string) || "",
+          sipUri: sipUri || "",
+          sipRegistrar: (getVal(device, `${igd}.Services.VoiceService.1.VoiceProfile.1.SIP.RegistrarServer`) as string) ||
+                        (getVal(device, `${igd}.Services.VoiceService.1.VoiceProfile.${i}.SIP.RegistrarServer`) as string) || "",
+          sipAuthUser: (getVal(device, `${voipBase}.SIP.AuthUserName`) as string) || "",
+        });
+        break;
+      }
+    }
+  }
+
+  const lanIp = (firstOf(device,
+    `${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress`,
+    `${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPAddress`,
+    `${dev}.DHCPv4.Server.Pool.1.IPInterface`
+  ) as string) || "";
+
+  const lanSubnet = (firstOf(device,
+    `${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceSubnetMask`,
+    `${igd}.LANDevice.1.LANHostConfigManagement.SubnetMask`
+  ) as string) || "";
+
+  const dhcpEnabled = getVal(device, `${igd}.LANDevice.1.LANHostConfigManagement.DHCPServerEnable`);
+  const dhcpStart = (getVal(device, `${igd}.LANDevice.1.LANHostConfigManagement.MinAddress`) as string) || "";
+  const dhcpEnd = (getVal(device, `${igd}.LANDevice.1.LANHostConfigManagement.MaxAddress`) as string) || "";
+
+  const wifiEnabled = getVal(device, `${igd}.LANDevice.1.WLANConfiguration.1.Enable`);
+  const wifiEnabled5g = getVal(device, `${igd}.LANDevice.1.WLANConfiguration.5.Enable`) ??
+                         getVal(device, `${igd}.LANDevice.1.WLANConfiguration.6.Enable`);
+
+  const memUsage = firstOf(device,
+    `${igd}.DeviceInfo.MemoryStatus.Free`,
+    `${dev}.DeviceInfo.MemoryStatus.Free`
+  ) as number | null;
+
+  const cpuUsage = firstOf(device,
+    `${igd}.DeviceInfo.ProcessStatus.CPUUsage`,
+    `${dev}.DeviceInfo.ProcessStatus.CPUUsage`
+  ) as number | null;
+
+  return {
+    ...basic,
+    uptime: basic.uptime,
+    lastInform: basic.lastInform || "",
+    lastBoot: basic.lastBoot || "",
+    wifiEnabled: wifiEnabled === true || wifiEnabled === 1 || wifiEnabled === "1",
+    wifiEnabled5g: wifiEnabled5g === true || wifiEnabled5g === 1 || wifiEnabled5g === "1",
+    connectedHosts,
+    ethernetPorts,
+    wanConnections,
+    voipLines,
+    lanIp,
+    lanSubnet,
+    dhcpEnabled: dhcpEnabled === true || dhcpEnabled === 1 || dhcpEnabled === "1",
+    dhcpStart,
+    dhcpEnd,
+    memoryUsage: memUsage,
+    cpuUsage,
+  };
+}
+
 export function isGenieACSConfigured(): boolean {
   return !!process.env.GENIEACS_NBI_URL;
 }

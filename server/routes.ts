@@ -21,6 +21,7 @@ import {
   genieDownloadFirmware,
   genieGetDeviceParameters,
   extractDeviceInfo,
+  extractLiveDeviceInfo,
   isGenieACSConfigured,
   genieCheckConnectivity,
   GenieACSError,
@@ -132,6 +133,21 @@ export async function registerRoutes(
   app.delete("/api/devices/:id", async (req, res) => {
     await storage.deleteDevice(req.params.id);
     res.status(204).end();
+  });
+
+  app.get("/api/devices/:id/live", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    try {
+      const genieDevice = await genieGetDevice(device.genieId);
+      if (!genieDevice) return res.status(404).json({ message: "Dispositivo não encontrado no GenieACS" });
+      const liveInfo = extractLiveDeviceInfo(genieDevice);
+      res.json(liveInfo);
+    } catch (error) {
+      handleGenieError(error, res);
+    }
   });
 
   app.post("/api/devices/:id/reboot", async (req, res) => {
