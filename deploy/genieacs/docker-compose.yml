@@ -23,13 +23,12 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
-    ports:
-      - "${CWMP_PORT:-7547}:7547"
+    expose:
+      - "7547"
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs
       - GENIEACS_CWMP_ACCESS_LOG_FILE=/var/log/genieacs/cwmp-access.log
       - GENIEACS_EXT_DIR=/opt/genieacs/ext
-      - GENIEACS_CWMP_SSL=false
     volumes:
       - genieacs_app:/opt/genieacs
       - genieacs_ext:/opt/genieacs/ext
@@ -47,7 +46,7 @@ services:
       mongodb:
         condition: service_healthy
     ports:
-      - "${NBI_PORT:-7557}:7557"
+      - "7557:7557"
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs
       - GENIEACS_NBI_ACCESS_LOG_FILE=/var/log/genieacs/nbi-access.log
@@ -67,7 +66,7 @@ services:
       mongodb:
         condition: service_healthy
     ports:
-      - "${FS_PORT:-7567}:7567"
+      - "7567:7567"
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs
       - GENIEACS_FS_ACCESS_LOG_FILE=/var/log/genieacs/fs-access.log
@@ -89,7 +88,7 @@ services:
       mongodb:
         condition: service_healthy
     ports:
-      - "${UI_PORT:-3001}:3000"
+      - "3001:3000"
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs
       - GENIEACS_UI_ACCESS_LOG_FILE=/var/log/genieacs/ui-access.log
@@ -100,11 +99,39 @@ services:
     networks:
       - genieacs
 
+  nginx:
+    image: nginx:alpine
+    container_name: genieacs-nginx
+    restart: always
+    depends_on:
+      - genieacs-cwmp
+    ports:
+      - "7547:7547"
+      - "80:80"
+    volumes:
+      - ./nginx/cwmp.conf:/etc/nginx/conf.d/default.conf
+      - letsencrypt_data:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    networks:
+      - genieacs
+
+  certbot:
+    image: certbot/certbot
+    container_name: genieacs-certbot
+    volumes:
+      - letsencrypt_data:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done'"
+    networks:
+      - genieacs
+
 volumes:
   mongo_data:
   genieacs_app:
   genieacs_ext:
   genieacs_logs:
+  letsencrypt_data:
+  certbot_webroot:
 
 networks:
   genieacs:

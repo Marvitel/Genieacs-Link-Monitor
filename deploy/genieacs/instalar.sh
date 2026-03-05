@@ -33,7 +33,7 @@ echo ""
 # ============================================
 echo -e "${GREEN}[1/5] Atualizando sistema...${NC}"
 apt-get update -qq
-apt-get install -y -qq ca-certificates curl gnupg lsb-release apt-transport-https > /dev/null 2>&1
+apt-get install -y -qq ca-certificates curl gnupg lsb-release apt-transport-https dnsutils > /dev/null 2>&1
 echo -e "  OK"
 
 # ============================================
@@ -164,6 +164,11 @@ echo ""
 echo -e "${BOLD}Testar NBI API:${NC}"
 echo -e "  ${CYAN}curl http://${SERVER_IP}:7557/devices${NC}"
 echo -e "  Deve retornar: ${GREEN}[]${NC} (lista vazia)"
+echo ""
+echo -e "${BOLD}SSL/HTTPS (para ONUs com HTTPS):${NC}"
+echo -e "  Se suas ONUs usam HTTPS, execute:"
+echo -e "  ${CYAN}sudo bash ${SCRIPT_DIR}/configurar-ssl.sh admin@marvitel.com.br${NC}"
+echo -e "  Isso configura Let's Encrypt para ${CYAN}flashman.marvitel.com.br:7547${NC}"
 echo ""
 echo -e "${YELLOW}Próximo passo:${NC} Acesse o NetControl e clique em"
 echo -e "'Configurar GenieACS' na página de Configurações."

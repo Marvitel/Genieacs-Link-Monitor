@@ -92,12 +92,33 @@ The system creates these provisions and presets automatically via NBI API:
 - **netcontrol-boot** - Runs all provisions on device boot
 - **netcontrol-value-change** - Runs WAN/PON on parameter changes
 
-## Deployment
-Production deployment uses Docker Compose with:
-- MongoDB (GenieACS database)
-- GenieACS CWMP (port 7547)
+## GenieACS Deployment (deploy/genieacs/)
+Runs on dedicated server 191.52.255.46 via Docker Compose:
+- MongoDB 4.4 (no AVX required)
+- GenieACS CWMP (internal, via Nginx)
 - GenieACS NBI (port 7557)
 - GenieACS FS (port 7567)
+- GenieACS UI (port 3001)
+- Nginx (SSL termination, port 7547 HTTPS + port 80)
+- Certbot (Let's Encrypt auto-renewal)
+
+### SSL/HTTPS Setup
+ONUs connect via `https://flashman.marvitel.com.br:7547`
+- Nginx terminates SSL and proxies to GenieACS CWMP
+- Let's Encrypt certificate via `configurar-ssl.sh`
+- Auto-renewal every 12h via Certbot container
+- Supports TLS 1.0-1.3 for legacy ONUs
+- Path `/tr069` works (GenieACS accepts any path)
+
+### Files
+- docker-compose.yml - All services including Nginx/Certbot
+- instalar.sh - Initial server setup
+- configurar-ssl.sh - SSL certificate setup
+- nginx/cwmp.conf - Nginx config with SSL
+- nginx/cwmp-inicial.conf - Temp config for cert generation
+
+## NetControl Deployment
+Production deployment uses Docker Compose with:
 - PostgreSQL (NetControl database)
 - NetControl Panel (port 3000)
 - Nginx (reverse proxy, ports 80/443)
