@@ -72,17 +72,24 @@ const username = declare("DeviceID.ID", {value: 1}).value[0];
 const password = Math.trunc(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
 const informInterval = 300;
 
-// TR-098
+// Detectar data model do device
+const oui = declare("DeviceID.OUI", {value: 1}).value[0];
+const pc = declare("DeviceID.ProductClass", {value: 1}).value[0] || "";
+const mfg = declare("DeviceID.Manufacturer", {value: 1}).value[0] || "";
+
+// TR-098 (InternetGatewayDevice) - maioria dos CPEs
 declare("InternetGatewayDevice.ManagementServer.ConnectionRequestUsername", {value: 1}, {value: username});
 declare("InternetGatewayDevice.ManagementServer.ConnectionRequestPassword", {value: 1}, {value: password});
 declare("InternetGatewayDevice.ManagementServer.PeriodicInformEnable", {value: 1}, {value: true});
 declare("InternetGatewayDevice.ManagementServer.PeriodicInformInterval", {value: 1}, {value: informInterval});
 
-// TR-181
-declare("Device.ManagementServer.ConnectionRequestUsername", {value: 1}, {value: username});
-declare("Device.ManagementServer.ConnectionRequestPassword", {value: 1}, {value: password});
-declare("Device.ManagementServer.PeriodicInformEnable", {value: 1}, {value: true});
-declare("Device.ManagementServer.PeriodicInformInterval", {value: 1}, {value: informInterval});
+// TR-181 (Device) - apenas para devices que usam Device.* e NÃO são TP-Link (XX530v rejeita com 9006)
+if (pc.indexOf("XX530") < 0 && pc.indexOf("EX520") < 0 && pc.indexOf("EX141") < 0) {
+  declare("Device.ManagementServer.ConnectionRequestUsername", {value: 1}, {value: username});
+  declare("Device.ManagementServer.ConnectionRequestPassword", {value: 1}, {value: password});
+  declare("Device.ManagementServer.PeriodicInformEnable", {value: 1}, {value: true});
+  declare("Device.ManagementServer.PeriodicInformInterval", {value: 1}, {value: informInterval});
+}
 `,
 
   "netcontrol-inform": `
@@ -165,11 +172,8 @@ declare("Device.WiFi.AccessPoint.*.Security.KeyPassphrase", {value: 1});
 const now = Date.now();
 const hourly = Date.now(3600000);
 
-// Sinal óptico GPON - pedir valores diretos sem {path: now} excessivo
-// Cada fabricante tem um path diferente - pedimos todos, CPE ignora os que não existem
-
-// Variantes de path para RXPower/TXPower/Temperature/Voltage
-// SEM {path:} para evitar too_many_commits - apenas {value:} para pedir o valor
+// Sinal GPON - valores diretos para paths conhecidos de cada fabricante
+// Intelbras (WANDevice.1)
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.RXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.Temperature", {value: now});
@@ -178,24 +182,34 @@ declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.RXPower", {va
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.TXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.Temperature", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.1.Voltage", {value: now});
+// Intelbras typo
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.RXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TXPower", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.Temperature", {value: now});
+declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.Voltage", {value: now});
+// ZTE (WANDevice.1)
 declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.RXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.TXPower", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.Temperature", {value: now});
 declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.Voltage", {value: now});
-declare("InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.RXPower", {value: now});
-declare("InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.TXPower", {value: now});
 
-// Descoberta de tree PON por fabricante - apenas 1x por hora para evitar loop
+// ZTE usa WANDevice.2 com X_ZTE-COM_GponInterfaceConfig
+declare("InternetGatewayDevice.WANDevice.2.X_ZTE-COM_GponInterfaceConfig.*", {path: hourly, value: hourly});
+declare("InternetGatewayDevice.WANDevice.2.X_ZTE-COM_WANPONInterfaceConfig.*", {path: hourly, value: hourly});
+
+// Descoberta de tree PON - apenas 1x por hora
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.*", {path: hourly, value: hourly});
 declare("InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.*", {path: hourly, value: hourly});
 declare("InternetGatewayDevice.WANDevice.1.GponInterfaceConfig.*", {path: hourly, value: hourly});
 
+// TP-Link Device.Optical e Device.X_TP_GPON
+declare("Device.Optical.*", {path: hourly, value: hourly});
+declare("Device.X_TP_GPON.*", {path: hourly, value: hourly});
+
 // Temperatura do dispositivo
 declare("InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value", {value: now});
 
-// Ethernet Interface Config - sem wildcard {path:} para evitar loop
+// Ethernet ports status
 declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Status", {value: now});
 declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.2.Status", {value: now});
 declare("InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.3.Status", {value: now});
