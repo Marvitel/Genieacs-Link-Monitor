@@ -10,10 +10,16 @@ import {
   genieRefreshDevice,
   genieFactoryReset,
   genieSetDeviceParameter,
+  genieSetMultipleParameters,
+  genieRunDiagnostic,
+  genieGetDiagnosticResult,
   genieGetTasks,
   genieDeleteDevice,
   genieGetPresets,
   genieGetFiles,
+  genieDeleteFile,
+  genieDownloadFirmware,
+  genieGetDeviceParameters,
   extractDeviceInfo,
   isGenieACSConfigured,
   genieCheckConnectivity,
@@ -34,8 +40,31 @@ const setParameterSchema = z.object({
   value: z.union([z.string(), z.number(), z.boolean()]),
 });
 
+const setMultipleParametersSchema = z.object({
+  parameters: z.array(z.tuple([z.string(), z.union([z.string(), z.number(), z.boolean()])])),
+});
+
 const refreshSchema = z.object({
   objectPath: z.string().optional().default(""),
+});
+
+const diagnosticSchema = z.object({
+  type: z.enum(["ping", "traceroute", "download", "upload"]),
+  host: z.string().min(1, "host é obrigatório"),
+});
+
+const wifiConfigSchema = z.object({
+  ssid: z.string().optional(),
+  password: z.string().optional(),
+  ssid5g: z.string().optional(),
+  password5g: z.string().optional(),
+  channel: z.number().optional(),
+  channel5g: z.number().optional(),
+});
+
+const firmwareSchema = z.object({
+  fileId: z.string().min(1),
+  fileName: z.string().min(1),
 });
 
 export async function registerRoutes(
@@ -108,13 +137,250 @@ export async function registerRoutes(
   app.post("/api/devices/:id/reboot", async (req, res) => {
     const device = await storage.getDevice(req.params.id);
     if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+
+    if (device.genieId) {
+      try {
+        await genieRebootDevice(device.genieId);
+      } catch (error) {
+        return handleGenieError(error, res);
+      }
+    }
+
     await storage.createDeviceLog({
       deviceId: device.id,
       eventType: "reboot",
       message: `Comando de reboot enviado para ${device.manufacturer} ${device.model} (${device.serialNumber})`,
       severity: "info",
     });
-    res.json({ message: "Reboot command sent" });
+    res.json({ message: "Reboot enviado" });
+  });
+
+  app.post("/api/devices/:id/factory-reset", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+
+    if (device.genieId) {
+      try {
+        await genieFactoryReset(device.genieId);
+      } catch (error) {
+        return handleGenieError(error, res);
+      }
+    }
+
+    await storage.createDeviceLog({
+      deviceId: device.id,
+      eventType: "factory-reset",
+      message: `Factory reset enviado para ${device.manufacturer} ${device.model} (${device.serialNumber})`,
+      severity: "warning",
+    });
+    res.json({ message: "Factory reset enviado" });
+  });
+
+  app.post("/api/devices/:id/refresh", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+
+    if (device.genieId) {
+      try {
+        await genieRefreshDevice(device.genieId);
+      } catch (error) {
+        return handleGenieError(error, res);
+      }
+    }
+    res.json({ message: "Atualização solicitada" });
+  });
+
+  app.post("/api/devices/:id/diagnostic", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const parsed = diagnosticSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    try {
+      await genieRunDiagnostic(device.genieId, parsed.data.type, parsed.data.host);
+      await storage.createDeviceLog({
+        deviceId: device.id,
+        eventType: "diagnostic",
+        message: `Diagnóstico ${parsed.data.type} iniciado para ${parsed.data.host}`,
+        severity: "info",
+      });
+      res.json({ message: `Diagnóstico ${parsed.data.type} iniciado` });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.get("/api/devices/:id/diagnostic/:type", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const type = req.params.type as "ping" | "traceroute";
+    try {
+      const result = await genieGetDiagnosticResult(device.genieId, type);
+      res.json(result);
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.post("/api/devices/:id/wifi-config", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const parsed = wifiConfigSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    const parameters: Array<[string, string | number | boolean]> = [];
+    const igd = "InternetGatewayDevice";
+
+    if (parsed.data.ssid) {
+      parameters.push([`${igd}.LANDevice.1.WLANConfiguration.1.SSID`, parsed.data.ssid]);
+    }
+    if (parsed.data.password) {
+      parameters.push([`${igd}.LANDevice.1.WLANConfiguration.1.KeyPassphrase`, parsed.data.password]);
+      parameters.push([`${igd}.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase`, parsed.data.password]);
+    }
+    if (parsed.data.ssid5g) {
+      parameters.push([`${igd}.LANDevice.1.WLANConfiguration.5.SSID`, parsed.data.ssid5g]);
+    }
+    if (parsed.data.password5g) {
+      parameters.push([`${igd}.LANDevice.1.WLANConfiguration.5.KeyPassphrase`, parsed.data.password5g]);
+      parameters.push([`${igd}.LANDevice.1.WLANConfiguration.5.PreSharedKey.1.KeyPassphrase`, parsed.data.password5g]);
+    }
+    if (parsed.data.channel !== undefined) {
+      parameters.push([`${igd}.LANDevice.1.WLANConfiguration.1.Channel`, parsed.data.channel]);
+    }
+    if (parsed.data.channel5g !== undefined) {
+      parameters.push([`${igd}.LANDevice.1.WLANConfiguration.5.Channel`, parsed.data.channel5g]);
+    }
+
+    if (parameters.length === 0) {
+      return res.status(400).json({ message: "Nenhuma configuração informada" });
+    }
+
+    try {
+      await genieSetMultipleParameters(device.genieId, parameters);
+
+      const updates: Record<string, string | number> = {};
+      if (parsed.data.ssid) updates.ssid = parsed.data.ssid;
+      if (parsed.data.ssid5g) updates.ssid5g = parsed.data.ssid5g;
+      if (parsed.data.password) updates.wifiPassword = parsed.data.password;
+      if (parsed.data.password5g) updates.wifiPassword5g = parsed.data.password5g;
+      await storage.updateDevice(device.id, updates);
+
+      await storage.createDeviceLog({
+        deviceId: device.id,
+        eventType: "config-change",
+        message: `Configuração WiFi atualizada: ${Object.keys(parsed.data).filter(k => (parsed.data as Record<string, unknown>)[k]).join(", ")}`,
+        severity: "info",
+      });
+
+      res.json({ message: "Configuração WiFi enviada" });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.post("/api/devices/:id/pppoe-config", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const schema = z.object({
+      username: z.string().min(1),
+      password: z.string().min(1),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    const igd = "InternetGatewayDevice";
+    const parameters: Array<[string, string | number | boolean]> = [
+      [`${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username`, parsed.data.username],
+      [`${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Password`, parsed.data.password],
+    ];
+
+    try {
+      await genieSetMultipleParameters(device.genieId, parameters);
+      await storage.updateDevice(device.id, { pppoeUser: parsed.data.username });
+      await storage.createDeviceLog({
+        deviceId: device.id,
+        eventType: "config-change",
+        message: `PPPoE atualizado: ${parsed.data.username}`,
+        severity: "info",
+      });
+      res.json({ message: "Configuração PPPoE enviada" });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.post("/api/devices/:id/firmware-update", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const parsed = firmwareSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    try {
+      await genieDownloadFirmware(device.genieId, parsed.data.fileId, parsed.data.fileName);
+      await storage.createDeviceLog({
+        deviceId: device.id,
+        eventType: "firmware-update",
+        message: `Atualização de firmware iniciada: ${parsed.data.fileName}`,
+        severity: "info",
+      });
+      res.json({ message: "Atualização de firmware enviada" });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.post("/api/devices/:id/set-parameter", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const parsed = setParameterSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    try {
+      await genieSetDeviceParameter(device.genieId, parsed.data.parameterPath, parsed.data.value);
+      res.json({ message: "Parâmetro definido" });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.get("/api/devices/:id/parameters", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const path = req.query.path as string || "InternetGatewayDevice";
+    try {
+      const result = await genieGetDeviceParameters(device.genieId, path);
+      res.json(result);
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.get("/api/devices/:id/tasks", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.json([]);
+
+    try {
+      const tasks = await genieGetTasks(device.genieId);
+      res.json(tasks);
+    } catch (error) {
+      handleGenieError(error, res);
+    }
   });
 
   app.get("/api/device-logs", async (req, res) => {
@@ -298,6 +564,15 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/genieacs/files/:id", async (req, res) => {
+    try {
+      await genieDeleteFile(req.params.id);
+      res.status(204).end();
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
   app.post("/api/genieacs/sync", async (_req, res) => {
     try {
       const genieDevices = await genieGetDevices();
@@ -310,19 +585,31 @@ export async function registerRoutes(
           (d) => d.serialNumber === info.serialNumber
         );
 
+        const isOnline = info.lastInform && (Date.now() - new Date(info.lastInform).getTime()) < 600000;
+        const uptimeStr = info.uptime ? `${Math.floor(Number(info.uptime) / 86400)}d ${Math.floor((Number(info.uptime) % 86400) / 3600)}h` : null;
+
         if (existing) {
           await storage.updateDevice(existing.id, {
-            status: info.lastInform && (Date.now() - new Date(info.lastInform).getTime()) < 600000 ? "online" : "offline",
+            genieId: info.genieId,
+            status: isOnline ? "online" : "offline",
             firmwareVersion: info.firmwareVersion || existing.firmwareVersion,
+            hardwareVersion: info.hardwareVersion || existing.hardwareVersion,
             ipAddress: info.ipAddress || existing.ipAddress,
             macAddress: info.macAddress || existing.macAddress,
             rxPower: info.rxPower !== null ? info.rxPower : existing.rxPower,
             txPower: info.txPower !== null ? info.txPower : existing.txPower,
             temperature: info.temperature !== null ? info.temperature : existing.temperature,
+            voltage: info.voltage !== null ? info.voltage : existing.voltage,
             ssid: info.ssid || existing.ssid,
+            ssid5g: info.ssid5g || existing.ssid5g,
+            wifiChannel: info.wifiChannel || existing.wifiChannel,
+            wifiChannel5g: info.wifiChannel5g || existing.wifiChannel5g,
+            wifiPassword: info.wifiPassword || existing.wifiPassword,
+            wifiPassword5g: info.wifiPassword5g || existing.wifiPassword5g,
             pppoeUser: info.pppoeUser || existing.pppoeUser,
+            connectionType: info.connectionType || existing.connectionType,
             lastSeen: info.lastInform ? new Date(info.lastInform) : existing.lastSeen,
-            uptime: info.uptime ? `${Math.floor(Number(info.uptime) / 86400)}d ${Math.floor((Number(info.uptime) % 86400) / 3600)}h` : existing.uptime,
+            uptime: uptimeStr || existing.uptime,
           });
         } else {
           let deviceType: string = "ont";
@@ -331,21 +618,30 @@ export async function registerRoutes(
           else if (mfr.includes("ruijie")) deviceType = "mesh";
 
           await storage.createDevice({
+            genieId: info.genieId,
             serialNumber: info.serialNumber,
             model: info.model || "Unknown",
             manufacturer: info.manufacturer || "Unknown",
             deviceType,
             macAddress: info.macAddress || null,
             ipAddress: info.ipAddress || null,
-            status: info.lastInform && (Date.now() - new Date(info.lastInform).getTime()) < 600000 ? "online" : "offline",
+            status: isOnline ? "online" : "offline",
             firmwareVersion: info.firmwareVersion || null,
+            hardwareVersion: info.hardwareVersion || null,
             ssid: info.ssid || null,
+            ssid5g: info.ssid5g || null,
+            wifiChannel: info.wifiChannel || null,
+            wifiChannel5g: info.wifiChannel5g || null,
+            wifiPassword: info.wifiPassword || null,
+            wifiPassword5g: info.wifiPassword5g || null,
             pppoeUser: info.pppoeUser || null,
+            connectionType: info.connectionType || null,
             rxPower: info.rxPower,
             txPower: info.txPower,
             temperature: info.temperature,
+            voltage: info.voltage,
             lastSeen: info.lastInform ? new Date(info.lastInform) : null,
-            uptime: info.uptime ? `${Math.floor(Number(info.uptime) / 86400)}d ${Math.floor((Number(info.uptime) % 86400) / 3600)}h` : null,
+            uptime: uptimeStr,
           });
         }
         synced++;
