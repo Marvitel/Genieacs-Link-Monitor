@@ -1,0 +1,81 @@
+root@genieacsmarvitel:~/genieacs# cd /opt/genieacs-repo
+
+cat > instalar-genieacs.sh << 'SCRIPT'
+#!/bin/bash
+set -e
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+echo ""
+echo -e "${CYAN}╔═══════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║   GenieACS - Instalação para Debian           ║${NC}"
+echo -e "${CYAN}╚═══════════════════════════════════════════════╝${NC}"
+echo ""
+
+SERVER_IP=$(hostname -I | awk '{print $1}')
+echo -e "${YELLOW}IP detectado: ${SERVER_IP}${NC}"
+
+echo -e "${GREEN}[1/4] Verificando Docker...${NC}"
+if command -v docker &> /dev/null; then
+  echo "  Docker OK: $(docker --version)"
+else
+  echo "  Instalando Docker..."
+  apt-get update -qq
+  apt-get install -y -qq ca-certificates curl gnupg lsb-release > /dev/null 2>&1
+  install -m 0755 -d /etc/apt/keyrings
+  [ -f /etc/apt/keyrings/docker.gpg ] && rm /etc/apt/keyrings/docker.gpg
+  curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  chmod a+r /etc/apt/keyrings/docker.gpg
+  CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian ${CODENAME} stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  apt-get update -qq
+  apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null 2>&1
+  systemctl enable docker && systemctl start docker
+  echo "  Docker instalado: $(docker --version)"
+fi
+
+echo -e "${GREEN}[2/4] Criando docker-compose.yml...${NC}"
+cat > docker-compose.yml << 'EOF'
+version: "3.8"
+services:
+  mongodb:
+    image: mongo:6
+    container_name: genieacs-mongodb
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=genieacs
+    networks:
+      - genieacs
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  genieacs-cwmp:
+    image: genieacs/genieacs:latest
+    container_name: genieacs-cwmp
+sudo bash instalar-genieacs.shERVER_IP}:3001${NC}"IP}:7557${NC}"ho "NBI ainda iniciando"
+
+╔═══════════════════════════════════════════════╗
+║   GenieACS - Instalação para Debian           ║
+╚═══════════════════════════════════════════════╝
+
+IP detectado: 191.52.255.46
+[1/4] Verificando Docker...
+  Docker OK: Docker version 29.2.1, build a5c7197
+[2/4] Criando docker-compose.yml...
+  OK
+[3/4] Baixando imagens e iniciando...
+WARN[0000] /opt/genieacs-repo/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] pull 2/2
+ ! Image mongo:6                  Interrupted                                                                                                            1.0s
+ ✘ Image genieacs/genieacs:latest Error pull access denied for genieacs/genieacs, repository does not exist or may require 'docker login'                1.0s
+Error response from daemon: pull access denied for genieacs/genieacs, repository does not exist or may require 'docker login'
+root@genieacsmarvitel:/opt/genieacs-repo# 
