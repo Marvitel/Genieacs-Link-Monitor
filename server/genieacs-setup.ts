@@ -161,9 +161,44 @@ declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnectio
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.X_CT-COM_WANGponLinkConfig.VLANIDMark", {value: now});
 declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.X_CT-COM_WANGponLinkConfig.VLANMode", {value: now});
 
+// VLAN config (TP-Link WANEthernetLinkConfig)
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANEthernetLinkConfig.X_TP_VID", {value: now});
+declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANEthernetLinkConfig.X_TP_VLanEnabled", {value: now});
+
 // TR-181 (Device:2) IP interface
 declare("Device.IP.Interface.*", {path: hourly, value: now});
+declare("Device.IP.Interface.*.Name", {value: now});
+declare("Device.IP.Interface.*.Status", {value: now});
+declare("Device.IP.Interface.*.LowerLayers", {value: now});
+declare("Device.IP.Interface.*.IPv4Address.1.IPAddress", {value: now});
+declare("Device.IP.Interface.*.IPv4Address.1.SubnetMask", {value: now});
+
+// TR-181 PPP interface
 declare("Device.PPP.Interface.*", {path: hourly, value: now});
+declare("Device.PPP.Interface.*.Name", {value: now});
+declare("Device.PPP.Interface.*.Status", {value: now});
+declare("Device.PPP.Interface.*.Username", {value: now});
+declare("Device.PPP.Interface.*.LowerLayers", {value: now});
+declare("Device.PPP.Interface.*.IPCP.LocalIPAddress", {value: now});
+declare("Device.PPP.Interface.*.IPCP.DNSServers", {value: now});
+
+// TR-181 VLAN Termination (for resolving VLAN IDs)
+declare("Device.Ethernet.VLANTermination.*", {path: hourly, value: now});
+declare("Device.Ethernet.VLANTermination.*.VLANID", {value: now});
+declare("Device.Ethernet.VLANTermination.*.Name", {value: now});
+
+// TR-181 NAT
+declare("Device.NAT.InterfaceSetting.*", {path: hourly, value: now});
+declare("Device.NAT.InterfaceSetting.*.Interface", {value: now});
+declare("Device.NAT.InterfaceSetting.*.Enable", {value: now});
+
+// TR-181 DNS
+declare("Device.DNS.Client.Server.1.DNSServer", {value: now});
+declare("Device.DNS.Client.Server.2.DNSServer", {value: now});
+
+// TR-181 Routing
+declare("Device.Routing.Router.1.IPv4Forwarding.1.GatewayIPAddress", {value: now});
+declare("Device.Routing.Router.1.IPv4Forwarding.1.Interface", {value: now});
 `,
 
   "netcontrol-wifi": `

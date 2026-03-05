@@ -932,6 +932,7 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
           const enable = getVal(device, `${wanBase}.Enable`);
           if (ip || name || status) {
             const vlan = getVal(device, `${wcdBase}.X_CT-COM_WANGponLinkConfig.VLANIDMark`)
+              ?? getVal(device, `${wcdBase}.WANEthernetLinkConfig.X_TP_VID`)
               ?? getVal(device, `${wanBase}.X_VLAN_ID`)
               ?? getVal(device, `${wcdBase}.WANEthernetLinkConfig.X_VLAN_ID`);
             const serviceList = (getVal(device, `${wanBase}.X_CT-COM_ServiceList`) as string) || "";
@@ -962,26 +963,91 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
     }
   }
   if (wanConnections.length === 0) {
-    for (let i = 1; i <= 10; i++) {
-      const ipBase = `${dev}.IP.Interface.${i}`;
-      const ip = getVal(device, `${ipBase}.IPv4Address.1.IPAddress`) as string | null;
-      if (ip) {
+    const resolveVlanFromLowerLayers = (lowerLayers: string | null): string => {
+      if (!lowerLayers) return "";
+      const match = lowerLayers.match(/VLANTermination\.(\d+)/);
+      if (match) {
+        const vtIdx = match[1];
+        const vlanId = getVal(device, `${dev}.Ethernet.VLANTermination.${vtIdx}.VLANID`);
+        if (vlanId !== null && vlanId !== undefined && vlanId !== 0) return String(vlanId);
+      }
+      return "";
+    };
+
+    const natInterfaces = new Set<string>();
+    for (let ni = 1; ni <= 10; ni++) {
+      const natIface = getVal(device, `${dev}.NAT.InterfaceSetting.${ni}.Interface`) as string | null;
+      const natEnable = getVal(device, `${dev}.NAT.InterfaceSetting.${ni}.Enable`);
+      if (natIface && (natEnable === true || natEnable === 1 || natEnable === "1")) {
+        natInterfaces.add(natIface.replace(/\.$/, ""));
+      }
+    }
+
+    const dns1 = (getVal(device, `${dev}.DNS.Client.Server.1.DNSServer`) as string) || "";
+    const dns2 = (getVal(device, `${dev}.DNS.Client.Server.2.DNSServer`) as string) || "";
+    const dnsServers = [dns1, dns2].filter(Boolean).join(",");
+    const defaultGw = (getVal(device, `${dev}.Routing.Router.1.IPv4Forwarding.1.GatewayIPAddress`) as string) || "";
+
+    for (let pi = 1; pi <= 10; pi++) {
+      const pppBase = `${dev}.PPP.Interface.${pi}`;
+      const pppStatus = getVal(device, `${pppBase}.Status`) as string | null;
+      const pppName = getVal(device, `${pppBase}.Name`) as string | null;
+      const pppIp = getVal(device, `${pppBase}.IPCP.LocalIPAddress`) as string | null;
+      const pppUser = getVal(device, `${pppBase}.Username`) as string | null;
+      if (pppName || pppIp || (pppStatus && pppStatus !== "Down")) {
+        const lowerLayers = getVal(device, `${pppBase}.LowerLayers`) as string | null;
+        const pppDns = (getVal(device, `${pppBase}.IPCP.DNSServers`) as string) || dnsServers;
         wanConnections.push({
           index: wanConnections.length + 1,
-          name: (getVal(device, `${ipBase}.Name`) as string) || `Interface ${i}`,
+          name: pppName || `PPP ${pi}`,
+          type: "PPPoE",
+          ipAddress: pppIp || "",
+          macAddress: "",
+          subnetMask: "",
+          defaultGateway: defaultGw,
+          dnsServers: pppDns,
+          status: pppStatus === "Up" ? "Connected" : pppStatus === "Down" ? "Disconnected" : (pppStatus || ""),
+          username: pppUser || "",
+          uptime: 0,
+          natEnabled: natInterfaces.has(`${dev}.IP.Interface.${pi}`),
+          vlanId: resolveVlanFromLowerLayers(lowerLayers),
+          serviceList: "",
+          connectionType: "IP_Routed",
+          enabled: true,
+          wanDeviceIndex: 0,
+          wcdIndex: 0,
+          connIndex: pi,
+        });
+      }
+    }
+
+    for (let i = 1; i <= 15; i++) {
+      const ipBase = `${dev}.IP.Interface.${i}`;
+      const ip = getVal(device, `${ipBase}.IPv4Address.1.IPAddress`) as string | null;
+      const ipStatus = getVal(device, `${ipBase}.Status`) as string | null;
+      const ipName = getVal(device, `${ipBase}.Name`) as string | null;
+      if (ip && ip !== "0.0.0.0") {
+        const lowerLayers = getVal(device, `${ipBase}.LowerLayers`) as string | null;
+        const isPPP = lowerLayers?.includes("PPP.Interface");
+        if (isPPP) continue;
+        const isBridge = ipName?.startsWith("br") || lowerLayers?.includes("Bridge");
+        if (isBridge && (ip.startsWith("192.168.") || ip.startsWith("10.0.") || ip.startsWith("172.16."))) continue;
+        wanConnections.push({
+          index: wanConnections.length + 1,
+          name: ipName || `Interface ${i}`,
           type: "IPoE/DHCP",
           ipAddress: ip,
           macAddress: "",
           subnetMask: (getVal(device, `${ipBase}.IPv4Address.1.SubnetMask`) as string) || "",
-          defaultGateway: "",
-          dnsServers: "",
-          status: (getVal(device, `${ipBase}.Status`) as string) || "",
+          defaultGateway: defaultGw,
+          dnsServers,
+          status: ipStatus === "Up" ? "Connected" : ipStatus === "Down" ? "Disconnected" : (ipStatus || ""),
           username: "",
           uptime: 0,
-          natEnabled: false,
-          vlanId: "",
+          natEnabled: natInterfaces.has(`${dev}.IP.Interface.${i}`),
+          vlanId: resolveVlanFromLowerLayers(lowerLayers),
           serviceList: "",
-          connectionType: "",
+          connectionType: "IP_Routed",
           enabled: true,
           wanDeviceIndex: 0,
           wcdIndex: 0,
