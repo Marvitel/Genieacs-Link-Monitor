@@ -1,0 +1,51 @@
+name: Deploy GenieACS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/genieacs/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.GENIEACS_HOST }}
+          username: ${{ secrets.GENIEACS_USER }}
+          key: ${{ secrets.GENIEACS_SSH_KEY }}
+          port: ${{ secrets.GENIEACS_SSH_PORT || 22 }}
+          script: |
+            REPO_DIR="/opt/genieacs-repo"
+
+            if [ ! -d "$REPO_DIR" ]; then
+              git clone https://github.com/Marvitel/Genieacs-Link-Monitor.git $REPO_DIR
+            fi
+
+            cd $REPO_DIR
+            git fetch origin
+            git reset --hard origin/main
+
+            cd deploy/genieacs
+
+            if [ ! -f .env ]; then
+              cp .env.example .env
+              SERVER_IP=$(hostname -I | awk '{print $1}')
+              sed -i "s/FS_HOSTNAME=.*/FS_HOSTNAME=${SERVER_IP}/" .env
+            fi
+
+            docker compose pull
+            docker compose up -d
+
+            sleep 10
+            echo "=== Status dos serviços ==="
+            docker compose ps
+            echo ""
+            echo "=== Teste NBI ==="
+            curl -s http://localhost:7557/devices | head -c 100 || echo "NBI não respondeu"
