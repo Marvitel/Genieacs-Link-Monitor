@@ -54,6 +54,9 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
       return;
     }
     const basicAuth = req.headers.authorization;
+    if (!basicAuth) {
+      console.log(`[Auth Debug] No auth on ${req.method} ${req.path} | headers: authorization=${req.headers.authorization}, x-api-key=${req.headers["x-api-key"]}`);
+    }
     if (basicAuth?.startsWith("Basic ")) {
       const decoded = Buffer.from(basicAuth.slice(6), "base64").toString();
       const [username, password] = decoded.split(":");
