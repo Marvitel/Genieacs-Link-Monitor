@@ -598,6 +598,7 @@ export async function registerRoutes(
       if (pppoeConn) {
         savedConfig.pppoe = {
           username: pppoeConn.username,
+          vlanId: pppoeConn.vlanId ? parseInt(pppoeConn.vlanId) || undefined : undefined,
           wanDeviceIndex: pppoeConn.wanDeviceIndex,
           wcdIndex: pppoeConn.wcdIndex,
           connIndex: pppoeConn.connIndex,
@@ -1317,7 +1318,7 @@ export async function registerRoutes(
               }
               const pppoeConn = liveData.wanConnections?.find((w: { type: string; username?: string }) => w.type === "PPPoE" && w.username);
               if (pppoeConn) {
-                savedConfig.pppoe = { username: pppoeConn.username, wanDeviceIndex: pppoeConn.wanDeviceIndex, wcdIndex: pppoeConn.wcdIndex, connIndex: pppoeConn.connIndex };
+                savedConfig.pppoe = { username: pppoeConn.username, vlanId: pppoeConn.vlanId ? parseInt(pppoeConn.vlanId) || undefined : undefined, wanDeviceIndex: pppoeConn.wanDeviceIndex, wcdIndex: pppoeConn.wcdIndex, connIndex: pppoeConn.connIndex };
               } else if (device.pppoeUser) {
                 savedConfig.pppoe = { username: device.pppoeUser };
               }

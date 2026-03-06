@@ -135,6 +135,7 @@ export interface SavedDeviceConfig {
   pppoe?: {
     username?: string;
     password?: string;
+    vlanId?: number;
     wanDeviceIndex?: number;
     wcdIndex?: number;
     connIndex?: number;

@@ -1564,7 +1564,7 @@ export default function DeviceDetail() {
               </div>
               <div className="flex items-center gap-2 flex-wrap mt-1">
                 {(device.savedConfig as SavedDeviceConfig)?.wifi && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-wifi">WiFi</Badge>}
-                {(device.savedConfig as SavedDeviceConfig)?.pppoe && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-pppoe">PPPoE</Badge>}
+                {(device.savedConfig as SavedDeviceConfig)?.pppoe && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-pppoe">PPPoE{(device.savedConfig as SavedDeviceConfig)?.pppoe?.vlanId ? ` VLAN ${(device.savedConfig as SavedDeviceConfig)?.pppoe?.vlanId}` : ""}</Badge>}
                 {(device.savedConfig as SavedDeviceConfig)?.lan && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-lan">LAN</Badge>}
                 {((device.savedConfig as SavedDeviceConfig)?.voip?.length ?? 0) > 0 && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-voip">VoIP</Badge>}
               </div>

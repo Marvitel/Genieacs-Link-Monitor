@@ -118,14 +118,20 @@ if (!isTR181) {
   declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.MACAddress", {value: hourly});
   declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.DefaultGateway", {value: hourly});
   declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.DNSServers", {value: hourly});
+  declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANEthernetLinkConfig.X_TP_VID", {value: hourly});
+  declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.X_CT-COM_WANGponLinkConfig.VLANIDMark", {value: hourly});
 } else {
   declare("Device.IP.Interface.*.IPv4Address.*.IPAddress", {value: now});
   declare("Device.IP.Interface.*.Status", {value: now});
   declare("Device.IP.Interface.*.Name", {value: hourly});
+  declare("Device.IP.Interface.*.LowerLayers", {value: hourly});
   declare("Device.PPP.Interface.*.IPCP.LocalIPAddress", {value: now});
   declare("Device.PPP.Interface.*.Status", {value: now});
   declare("Device.PPP.Interface.*.Username", {value: hourly});
   declare("Device.PPP.Interface.*.Name", {value: hourly});
+  declare("Device.PPP.Interface.*.LowerLayers", {value: hourly});
+  declare("Device.Ethernet.VLANTermination.*.VLANID", {value: hourly});
+  declare("Device.Ethernet.VLANTermination.*.Name", {value: hourly});
 }
 `,
 
@@ -290,9 +296,13 @@ if (config.pppoe && config.pppoe.username) {
     var wd = config.pppoe.wanDeviceIndex || 1;
     var wcd = config.pppoe.wcdIndex || 1;
     var ci = config.pppoe.connIndex || 1;
-    declare("InternetGatewayDevice.WANDevice." + wd + ".WANConnectionDevice." + wcd + ".WANPPPConnection." + ci + ".Username", {value: 1}, {value: config.pppoe.username});
+    var wcdBase = "InternetGatewayDevice.WANDevice." + wd + ".WANConnectionDevice." + wcd;
+    declare(wcdBase + ".WANPPPConnection." + ci + ".Username", {value: 1}, {value: config.pppoe.username});
     if (config.pppoe.password) {
-      declare("InternetGatewayDevice.WANDevice." + wd + ".WANConnectionDevice." + wcd + ".WANPPPConnection." + ci + ".Password", {value: 1}, {value: config.pppoe.password});
+      declare(wcdBase + ".WANPPPConnection." + ci + ".Password", {value: 1}, {value: config.pppoe.password});
+    }
+    if (config.pppoe.vlanId) {
+      declare(wcdBase + ".WANEthernetLinkConfig.X_TP_VID", {value: 1}, {value: config.pppoe.vlanId});
     }
   } else {
     var pci = config.pppoe.connIndex || 1;
