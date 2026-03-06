@@ -59,24 +59,15 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
       const [username, password] = decoded.split(":");
       if (username && password) {
         const user = await storage.getUserByUsername(username);
-        if (!user) {
-          console.log(`[Auth] Basic auth failed: user '${username}' not found`);
-        } else if (!user.active) {
-          console.log(`[Auth] Basic auth failed: user '${username}' is inactive`);
-        } else {
-          const valid = await bcrypt.compare(password, user.password);
-          if (!valid) {
-            console.log(`[Auth] Basic auth failed: wrong password for '${username}'`);
-          } else {
-            (req as any).authenticatedUser = { id: user.id, username: user.username, role: user.role };
-            try {
-              req.session.userId = user.id;
-              req.session.username = user.username;
-              req.session.role = user.role;
-            } catch {}
-            next();
-            return;
-          }
+        if (user && user.active && await bcrypt.compare(password, user.password)) {
+          (req as any).authenticatedUser = { id: user.id, username: user.username, role: user.role };
+          try {
+            req.session.userId = user.id;
+            req.session.username = user.username;
+            req.session.role = user.role;
+          } catch {}
+          next();
+          return;
         }
       }
     }
