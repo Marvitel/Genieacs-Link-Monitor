@@ -544,7 +544,9 @@ export async function registerRoutes(
     if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
 
     try {
-      const liveData = await extractLiveDeviceInfo(device.genieId);
+      const genieDevice = await genieGetDevice(device.genieId);
+      if (!genieDevice) return res.status(404).json({ message: "Dispositivo não encontrado no GenieACS" });
+      const liveData = extractLiveDeviceInfo(genieDevice);
       const savedConfig: SavedDeviceConfig = {};
 
       if (liveData.ssid || liveData.ssid5g || liveData.wifiPassword || liveData.wifiPassword5g) {
@@ -733,38 +735,43 @@ export async function registerRoutes(
     try {
       let config = oldDevice.savedConfig as SavedDeviceConfig | null;
       if (!config && oldDevice.genieId) {
-        const liveData = await extractLiveDeviceInfo(oldDevice.genieId);
+        const genieOldDevice = await genieGetDevice(oldDevice.genieId);
+        const liveData = genieOldDevice ? extractLiveDeviceInfo(genieOldDevice) : null;
         config = {} as SavedDeviceConfig;
 
-        if (liveData.ssid || liveData.ssid5g) {
-          config.wifi = {
-            ssid: liveData.ssid || undefined,
-            password: liveData.wifiPassword || undefined,
-            ssid5g: liveData.ssid5g || undefined,
-            password5g: liveData.wifiPassword5g || undefined,
-          };
-        }
-        const pppoeConn = liveData.wanConnections?.find((w: { type: string; username?: string }) => w.type === "PPPoE" && w.username);
-        if (pppoeConn) {
-          config.pppoe = {
-            username: pppoeConn.username,
-            wanDeviceIndex: pppoeConn.wanDeviceIndex,
-            wcdIndex: pppoeConn.wcdIndex,
-            connIndex: pppoeConn.connIndex,
-          };
+        if (liveData) {
+          if (liveData.ssid || liveData.ssid5g) {
+            config.wifi = {
+              ssid: liveData.ssid || undefined,
+              password: liveData.wifiPassword || undefined,
+              ssid5g: liveData.ssid5g || undefined,
+              password5g: liveData.wifiPassword5g || undefined,
+            };
+          }
+          const pppoeConn = liveData.wanConnections?.find((w: { type: string; username?: string }) => w.type === "PPPoE" && w.username);
+          if (pppoeConn) {
+            config.pppoe = {
+              username: pppoeConn.username,
+              wanDeviceIndex: pppoeConn.wanDeviceIndex,
+              wcdIndex: pppoeConn.wcdIndex,
+              connIndex: pppoeConn.connIndex,
+            };
+          } else if (oldDevice.pppoeUser) {
+            config.pppoe = { username: oldDevice.pppoeUser };
+          }
+          if (liveData.lanIp) {
+            config.lan = { lanIp: liveData.lanIp, lanSubnet: liveData.lanSubnet, dhcpEnabled: liveData.dhcpEnabled, dhcpStart: liveData.dhcpStart, dhcpEnd: liveData.dhcpEnd };
+          }
+          if (liveData.voipLines?.length > 0) {
+            config.voip = liveData.voipLines.filter((l: { enabled?: boolean; directoryNumber?: string }) => l.enabled || l.directoryNumber).map((l: Record<string, unknown>) => ({
+              profileIndex: l.profileIndex as number, lineIndex: l.lineIndex as number, enabled: l.enabled as boolean,
+              directoryNumber: l.directoryNumber as string, sipAuthUser: l.sipAuthUser as string, sipAuthPassword: l.sipAuthPassword as string,
+              sipUri: l.sipUri as string, sipRegistrar: l.sipRegistrar as string, sipRegistrarPort: l.sipRegistrarPort as number,
+              sipProxyServer: l.sipProxyServer as string, sipProxyPort: l.sipProxyPort as number, sipDomain: l.sipDomain as string,
+            }));
+          }
         } else if (oldDevice.pppoeUser) {
           config.pppoe = { username: oldDevice.pppoeUser };
-        }
-        if (liveData.lanIp) {
-          config.lan = { lanIp: liveData.lanIp, lanSubnet: liveData.lanSubnet, dhcpEnabled: liveData.dhcpEnabled, dhcpStart: liveData.dhcpStart, dhcpEnd: liveData.dhcpEnd };
-        }
-        if (liveData.voipLines?.length > 0) {
-          config.voip = liveData.voipLines.filter((l: { enabled?: boolean; directoryNumber?: string }) => l.enabled || l.directoryNumber).map((l: Record<string, unknown>) => ({
-            profileIndex: l.profileIndex as number, lineIndex: l.lineIndex as number, enabled: l.enabled as boolean,
-            directoryNumber: l.directoryNumber as string, sipAuthUser: l.sipAuthUser as string, sipAuthPassword: l.sipAuthPassword as string,
-            sipUri: l.sipUri as string, sipRegistrar: l.sipRegistrar as string, sipRegistrarPort: l.sipRegistrarPort as number,
-            sipProxyServer: l.sipProxyServer as string, sipProxyPort: l.sipProxyPort as number, sipDomain: l.sipDomain as string,
-          }));
         }
       }
 
