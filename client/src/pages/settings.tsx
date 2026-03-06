@@ -73,8 +73,8 @@ export default function Settings() {
   const [acsUrl, setAcsUrl] = useState("");
   const [nbiUrl, setNbiUrl] = useState("");
   const [informInterval, setInformInterval] = useState("300");
-  const [lmUrl, setLmUrl] = useState("");
-  const [lmKey, setLmKey] = useState("");
+  const [lmUser, setLmUser] = useState("");
+  const [lmPassword, setLmPassword] = useState("");
   const [autoSync, setAutoSync] = useState(false);
   const [autoDiscover, setAutoDiscover] = useState(false);
   const [notifyOffline, setNotifyOffline] = useState(true);
@@ -105,8 +105,8 @@ export default function Settings() {
       if (settings.acs_url) setAcsUrl(settings.acs_url);
       if (settings.nbi_url) setNbiUrl(settings.nbi_url);
       if (settings.inform_interval) setInformInterval(settings.inform_interval);
-      if (settings.linkmonitor_url) setLmUrl(settings.linkmonitor_url);
-      if (settings.linkmonitor_key) setLmKey(settings.linkmonitor_key);
+      if (settings.linkmonitor_user) setLmUser(settings.linkmonitor_user);
+      if (settings.linkmonitor_password) setLmPassword(settings.linkmonitor_password);
       setAutoSync(settings.auto_sync === "true");
       setAutoDiscover(settings.auto_discover === "true");
       setNotifyOffline(settings.notify_offline !== "false");
@@ -213,8 +213,8 @@ export default function Settings() {
 
   const saveLinkMonitor = () => {
     saveSettingsMutation.mutate({
-      linkmonitor_url: lmUrl,
-      linkmonitor_key: lmKey,
+      linkmonitor_user: lmUser,
+      linkmonitor_password: lmPassword,
       auto_sync: String(autoSync),
       auto_discover: String(autoDiscover),
     });
@@ -549,12 +549,12 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>URL do Link Monitor</Label>
-                <Input value={lmUrl} onChange={(e) => setLmUrl(e.target.value)} placeholder="https://linkmonitor.seudominio.com.br" data-testid="input-linkmonitor-url" />
+                <Label>Usuário API</Label>
+                <Input value={lmUser} onChange={(e) => setLmUser(e.target.value)} placeholder="usuario" data-testid="input-linkmonitor-user" />
               </div>
               <div className="space-y-2">
-                <Label>API Key</Label>
-                <Input type="password" value={lmKey} onChange={(e) => setLmKey(e.target.value)} placeholder="Sua API key" data-testid="input-linkmonitor-key" />
+                <Label>Senha API</Label>
+                <Input type="password" value={lmPassword} onChange={(e) => setLmPassword(e.target.value)} placeholder="••••••" data-testid="input-linkmonitor-password" />
               </div>
               <div className="flex items-center justify-between">
                 <div>
