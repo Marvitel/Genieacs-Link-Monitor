@@ -51,18 +51,15 @@ services:
       - netcontrol-panel
     ports:
       - "${HTTPS_PORT:-443}:443"
-      - "${HTTP_PORT:-80}:80"
     volumes:
       - ./nginx/netcontrol.conf:/etc/nginx/conf.d/default.conf:ro
       - ${SSL_CERT_PATH:-/etc/letsencrypt/live/flashman.marvitel.com.br}/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
       - ${SSL_CERT_PATH:-/etc/letsencrypt/live/flashman.marvitel.com.br}/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
-      - certbot_webroot:/var/www/certbot:ro
     networks:
       - netcontrol
 
 volumes:
   postgres_data:
-  certbot_webroot:
 
 networks:
   netcontrol:

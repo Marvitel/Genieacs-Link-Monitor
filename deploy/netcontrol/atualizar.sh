@@ -34,11 +34,6 @@ if [ -f "${SCRIPT_DIR}/.env" ]; then
     echo "HTTPS_PORT=443" >> "${SCRIPT_DIR}/.env"
     echo -e "  ${YELLOW}+${NC} Adicionado HTTPS_PORT ao .env"
   fi
-  if ! grep -q "HTTP_PORT" "${SCRIPT_DIR}/.env" 2>/dev/null; then
-    echo "HTTP_PORT=80" >> "${SCRIPT_DIR}/.env"
-    echo -e "  ${YELLOW}+${NC} Adicionado HTTP_PORT ao .env"
-  fi
-
   sed -i "s/COOKIE_SECURE=false/COOKIE_SECURE=true/" "${SCRIPT_DIR}/.env"
 
   source "${SCRIPT_DIR}/.env"
