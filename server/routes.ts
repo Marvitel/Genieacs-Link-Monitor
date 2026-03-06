@@ -125,7 +125,10 @@ export async function registerRoutes(
     req.session.userId = user.id;
     req.session.username = user.username;
     req.session.role = user.role;
-    res.json({ id: user.id, username: user.username, displayName: user.displayName, role: user.role });
+    req.session.save((err) => {
+      if (err) return res.status(500).json({ message: "Erro ao salvar sessão" });
+      res.json({ id: user.id, username: user.username, displayName: user.displayName, role: user.role });
+    });
   });
 
   app.post("/api/auth/logout", (req, res) => {
