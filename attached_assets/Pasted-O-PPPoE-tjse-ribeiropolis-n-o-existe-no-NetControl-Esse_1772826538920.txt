@@ -1,0 +1,25 @@
+O PPPoE tjse.ribeiropolis não existe no NetControl. Esse é o problema — o dispositivo não está cadastrado com esse username PPPoE no ACS. Vou verificar quais são os links de ribeiropolis no Link Monitor e seus dados:
+O dispositivo da ribeiropolis não está no NetControl com o PPPoE tjse.ribeiropolis e nem o serial está cadastrado. Agora entendo — o link do Link Monitor precisa de um identificador que corresponda a um dispositivo no NetControl. Se o PPPoE do link é tjse.ribeiropolis mas o dispositivo no NetControl está registrado com outro PPPoE (ou sem PPPoE), não vai encontrar.
+
+Vou verificar o que a produção do Link Monitor tem nos campos do link:
+O dispositivo não está no NetControl com PPPoE tjse.*. Isso significa que a ONU desse link ou não está no ACS, ou está registrada com outro PPPoE.
+
+Vou explicar a situação e sugerir o que pode ser ajustado no NetControl:
+
+A integração entre Link Monitor e NetControl está funcionando corretamente — o problema é que o dispositivo do link tjse.ribeiropolis não está cadastrado no NetControl ACS (nem pelo PPPoE tjse.ribeiropolis, nem pelo serial do link).
+
+Isso pode acontecer por dois motivos:
+
+A ONU desse cliente ainda não se conectou ao GenieACS (não fez o bootstrap/inform)
+A ONU está no NetControl mas com um PPPoE ou serial diferente do que está cadastrado no link
+Para funcionar, são 3 opções:
+
+Verificar se a ONU já informou ao GenieACS — ela precisa estar apontando para a URL do ACS (https://flashman.marvitel.com.br:7547) e ter feito pelo menos um inform
+Se a ONU está no NetControl com outro PPPoE — ajustar o PPPoE no Link Monitor ou no NetControl para que sejam iguais
+Se quiser, pode adicionar no NetControl um endpoint de busca por IP (ex: /api/v3/device/wan-ip/:ip/) que o Link Monitor poderia usar como fallback — já que os CPEs de produção têm IP cadastrado (191.52.252.104)
+Qual link você abriu para testar? Era o tjse.ribeiropolis? Consigo verificar se esse link tem serial cadastrado que corresponde a algum dispositivo no NetControl.
+abri o link 156 pppoe guarita do cliente park ville
+vi que o netcontrol só permite a busca pelo serial
+Entendi — o NetControl só busca por serial no endpoint /api/v3/device/serial-tr069/. Os endpoints de PPPoE e MAC existem na API de compatibilidade (flashman-api.ts) mas pode ser que não estejam funcionando corretamente, ou o dispositivo guarita realmente não tem esse PPPoE cadastrado no GenieACS.
+
+Vou verificar: o link 156 tem serial cadastrado no Link Monitor?

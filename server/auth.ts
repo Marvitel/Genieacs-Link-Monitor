@@ -60,9 +60,12 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
       if (username && password) {
         const user = await storage.getUserByUsername(username);
         if (user && user.active && await bcrypt.compare(password, user.password)) {
-          req.session.userId = user.id;
-          req.session.username = user.username;
-          req.session.role = user.role;
+          (req as any).authenticatedUser = { id: user.id, username: user.username, role: user.role };
+          try {
+            req.session.userId = user.id;
+            req.session.username = user.username;
+            req.session.role = user.role;
+          } catch {}
           next();
           return;
         }
