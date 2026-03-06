@@ -54,23 +54,29 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
       return;
     }
     const basicAuth = req.headers.authorization;
-    if (!basicAuth) {
-      console.log(`[Auth Debug] No auth on ${req.method} ${req.path} | headers: authorization=${req.headers.authorization}, x-api-key=${req.headers["x-api-key"]}`);
-    }
     if (basicAuth?.startsWith("Basic ")) {
       const decoded = Buffer.from(basicAuth.slice(6), "base64").toString();
       const [username, password] = decoded.split(":");
       if (username && password) {
         const user = await storage.getUserByUsername(username);
-        if (user && user.active && await bcrypt.compare(password, user.password)) {
-          (req as any).authenticatedUser = { id: user.id, username: user.username, role: user.role };
-          try {
-            req.session.userId = user.id;
-            req.session.username = user.username;
-            req.session.role = user.role;
-          } catch {}
-          next();
-          return;
+        if (!user) {
+          console.log(`[Auth] Basic auth failed: user '${username}' not found`);
+        } else if (!user.active) {
+          console.log(`[Auth] Basic auth failed: user '${username}' is inactive`);
+        } else {
+          const valid = await bcrypt.compare(password, user.password);
+          if (!valid) {
+            console.log(`[Auth] Basic auth failed: wrong password for '${username}'`);
+          } else {
+            (req as any).authenticatedUser = { id: user.id, username: user.username, role: user.role };
+            try {
+              req.session.userId = user.id;
+              req.session.username = user.username;
+              req.session.role = user.role;
+            } catch {}
+            next();
+            return;
+          }
         }
       }
     }
