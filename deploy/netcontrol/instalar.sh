@@ -33,7 +33,8 @@ check_genieacs() {
   echo -e "${GREEN}[1/5] Verificando GenieACS existente...${NC}"
 
   NBI_PORT="${GENIEACS_NBI_PORT:-7557}"
-  NBI_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:${NBI_PORT}/devices 2>/dev/null || echo "000")
+  NBI_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:${NBI_PORT}/devices" 2>/dev/null || echo "000")
+  NBI_CODE=$(echo "$NBI_CODE" | tail -c 4)
 
   if [ "$NBI_CODE" = "200" ]; then
     DEVICE_COUNT=$(curl -s --max-time 5 http://localhost:${NBI_PORT}/devices 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")

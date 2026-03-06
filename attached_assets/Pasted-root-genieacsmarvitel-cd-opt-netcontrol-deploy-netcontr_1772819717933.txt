@@ -1,0 +1,93 @@
+root@genieacsmarvitel:~# cd /opt/netcontrol/deploy/netcontrol
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# sudo bash instalar.sh
+
+╔═══════════════════════════════════════════════╗
+║                                               ║
+║   NetControl ACS - Instalação                 ║
+║   Painel de gerenciamento para GenieACS       ║
+║                                               ║
+╚═══════════════════════════════════════════════╝
+
+IP detectado: 191.52.255.46
+
+[1/5] Verificando GenieACS existente...
+  ⚠ GenieACS NBI não respondeu na porta 7557 (HTTP 200000)
+    O NetControl será instalado mesmo assim.
+    Certifique-se de que o GenieACS está rodando.
+[2/5] Verificando requisitos...
+  ✓ Docker: Docker version 29.2.1, build a5c7197
+  ✓ Docker Compose disponível
+[3/5] Configurando ambiente...
+  ✓ Arquivo .env criado com senhas seguras
+[4/5] Verificando portas...
+  ✓ Porta 3000 disponível
+  ✓ Porta 5432 disponível
+[5/5] Construindo e iniciando NetControl...
+
+#14 DONE 38.9s
+
+#15 resolving provenance for metadata file
+#15 DONE 0.0s
+ Image netcontrol-netcontrol-panel Built 
+
+[+] up 17/17
+ ✔ Image postgres:16-alpine        Pulled                                                                                                               20.1s
+ ✔ Network netcontrol_netcontrol   Created                                                                                                              0.5s
+ ✔ Volume netcontrol_postgres_data Created                                                                                                              0.1s
+ ✔ Container netcontrol-postgres   Healthy                                                                                                              16.5s
+ ✔ Container netcontrol-panel      Started                                                                                                              16.3s
+
+  Aguardando serviços iniciarem...
+  Aguardando... 20/20s
+  ✓ NetControl respondendo na porta 3000
+
+NAME                  STATUS                    PORTS
+netcontrol-panel      Up 21 seconds             0.0.0.0:3000->5000/tcp, [::]:3000->5000/tcp
+netcontrol-postgres   Up 34 seconds (healthy)   127.0.0.1:5432->5432/tcp
+  ✓ Certificado SSL encontrado para flashman.marvitel.com.br
+    Expira em: Jun  3 16:29:24 2026 GMT
+  ✓ Config Nginx gerada em: /opt/netcontrol/deploy/netcontrol/nginx/netcontrol-site.conf
+
+╔═══════════════════════════════════════════════╗
+║         Instalação Concluída!                 ║
+╚═══════════════════════════════════════════════╝
+
+Acesso ao NetControl:
+  ● HTTP direto:  http://191.52.255.46:3000
+
+Login padrão:
+  Usuário: admin
+  Senha:   admin
+  ⚠ Troque a senha após o primeiro login!
+
+GenieACS (já instalado):
+  ● NBI API:  http://localhost:7557
+  ● CWMP:     https://flashman.marvitel.com.br:7547
+
+Configurar Nginx (opcional):
+  Um arquivo de configuração foi gerado em:
+  /opt/netcontrol/deploy/netcontrol/nginx/netcontrol-site.conf
+
+  Para ativar HTTPS via Nginx do servidor:
+  sudo cp /opt/netcontrol/deploy/netcontrol/nginx/netcontrol-site.conf /etc/nginx/sites-available/netcontrol
+  sudo ln -sf /etc/nginx/sites-available/netcontrol /etc/nginx/sites-enabled/
+  sudo nginx -t && sudo systemctl reload nginx
+
+  Após configurar o Nginx, acesse:
+  https://flashman.marvitel.com.br
+
+Link Monitor - Configure apontando para:
+  URL da API:  http://191.52.255.46:3000
+  Usuário:     (usuário do NetControl)
+  Senha:       (senha do NetControl)
+  O Link Monitor usa autenticação Basic (usuário:senha)
+
+Comandos úteis:
+  Ver logs:       cd /opt/netcontrol/deploy/netcontrol && docker compose logs -f
+  Logs painel:    cd /opt/netcontrol/deploy/netcontrol && docker compose logs -f netcontrol-panel
+  Reiniciar:      cd /opt/netcontrol/deploy/netcontrol && docker compose restart
+  Parar:          cd /opt/netcontrol/deploy/netcontrol && docker compose down
+  Status:         cd /opt/netcontrol/deploy/netcontrol && docker compose ps
+  Atualizar:      cd /opt/netcontrol/deploy/netcontrol && bash atualizar.sh
+
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# 
