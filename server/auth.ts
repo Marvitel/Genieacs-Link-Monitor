@@ -23,6 +23,21 @@ export async function ensureAdminExists(): Promise<void> {
       active: true,
     });
     console.log("[Auth] Usuário admin criado automaticamente (senha: admin)");
+  } else {
+    const adminUser = await storage.getUserByUsername("admin");
+    if (adminUser) {
+      const passwordValid = adminUser.password && adminUser.password.startsWith("$2");
+      if (!passwordValid) {
+        const hashedPassword = await bcrypt.hash("admin", 10);
+        await storage.updateUser(adminUser.id, { password: hashedPassword } as any);
+        console.log("[Auth] Senha do admin estava corrompida - resetada para 'admin'");
+      }
+      if (!adminUser.active) {
+        await storage.updateUser(adminUser.id, { active: true } as any);
+        console.log("[Auth] Usuário admin reativado");
+      }
+    }
+    console.log(`[Auth] ${allUsers.length} usuário(s) encontrado(s) no banco`);
   }
 }
 

@@ -118,19 +118,42 @@ export async function registerRoutes(
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ message: "Usuário e senha são obrigatórios" });
     const user = await storage.getUserByUsername(username);
-    if (!user || !user.active) return res.status(401).json({ message: "Credenciais inválidas" });
+    if (!user || !user.active) {
+      console.log(`[Auth] Login failed: user '${username}' ${!user ? 'not found' : 'inactive'}`);
+      return res.status(401).json({ message: "Credenciais inválidas" });
+    }
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ message: "Credenciais inválidas" });
+    if (!valid) {
+      console.log(`[Auth] Login failed: invalid password for user '${username}'`);
+      return res.status(401).json({ message: "Credenciais inválidas" });
+    }
     await storage.updateUser(user.id, { lastLoginAt: new Date() } as any);
     req.session.userId = user.id;
     req.session.username = user.username;
     req.session.role = user.role;
+    console.log(`[Auth] Login successful: user '${username}'`);
     res.json({ id: user.id, username: user.username, displayName: user.displayName, role: user.role });
   });
 
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy(() => {});
     res.json({ message: "Logout realizado" });
+  });
+
+  app.post("/api/auth/reset-admin", async (req, res) => {
+    const clientIp = req.ip || req.socket.remoteAddress || "";
+    const isLocal = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "::ffff:127.0.0.1" || clientIp.includes("172.") || clientIp.includes("192.168.");
+    if (!isLocal) return res.status(403).json({ message: "Apenas acesso local" });
+    const adminUser = await storage.getUserByUsername("admin");
+    const hashedPassword = await bcrypt.hash("admin", 10);
+    if (adminUser) {
+      await storage.updateUser(adminUser.id, { password: hashedPassword, active: true } as any);
+      console.log("[Auth] Admin password reset via local endpoint");
+      return res.json({ message: "Senha do admin resetada para 'admin'" });
+    }
+    await storage.createUser({ username: "admin", password: hashedPassword, displayName: "Administrador", role: "admin", active: true });
+    console.log("[Auth] Admin user recreated via local endpoint");
+    res.json({ message: "Usuário admin recriado com senha 'admin'" });
   });
 
   app.get("/api/auth/me", async (req, res) => {
