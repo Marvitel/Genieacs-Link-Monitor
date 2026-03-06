@@ -159,6 +159,114 @@ export function registerFlashmanAPI(app: Express): void {
     }
   });
 
+  app.get("/api/v3/device/full/:identifier/", requireApiKey, async (req: Request, res: Response) => {
+    try {
+      const id = req.params.identifier;
+      const device = await findDeviceBySerial(id) || await findDeviceByMac(id) || await findDeviceByPppoe(id);
+      if (!device) return res.status(404).json({ success: false, message: "Device not found" });
+
+      let liveData: any = null;
+      if (device.genieId) {
+        try {
+          const genieDevice = await genieGetDevice(device.genieId);
+          if (genieDevice) {
+            liveData = extractLiveDeviceInfo(genieDevice);
+          }
+        } catch {}
+      }
+
+      const cfg = device.savedConfig as SavedDeviceConfig | null;
+      const isOnline = device.status === "online";
+
+      const result: any = {
+        success: true,
+        device: {
+          _id: device.macAddress || device.serialNumber,
+          serial_tr069: device.serialNumber,
+          acs_id: device.genieId || "",
+          status: isOnline ? "online" : "offline",
+
+          info: {
+            manufacturer: device.manufacturer || liveData?.manufacturer || "",
+            model: device.model || liveData?.model || "",
+            serial: device.serialNumber,
+            mac_address: device.macAddress || "",
+            firmware: device.firmwareVersion || liveData?.firmwareVersion || "",
+            hardware: device.hardwareVersion || liveData?.hardwareVersion || "",
+            uptime: liveData?.uptime || device.uptime || "",
+            last_inform: liveData?.lastInform || "",
+            last_boot: liveData?.lastBoot || "",
+            product_class: liveData?.productClass || "",
+            oui: liveData?.oui || "",
+          },
+
+          signal: {
+            rx_power: liveData?.rxPower ?? (device.rxPower != null ? device.rxPower : null),
+            tx_power: liveData?.txPower ?? (device.txPower != null ? device.txPower : null),
+            temperature: liveData?.temperature ?? null,
+            voltage: liveData?.voltage ?? null,
+          },
+
+          wan: {
+            connections: liveData?.wanConnections || [],
+            pppoe_user: device.pppoeUser || "",
+            wan_ip: liveData?.wanConnections?.[0]?.ipAddress || device.ipAddress || "",
+            connection_type: device.connectionType || "pppoe",
+          },
+
+          lan: {
+            ip: liveData?.lanIp || cfg?.lan?.lanIp || "",
+            subnet: liveData?.lanSubnet || cfg?.lan?.lanSubnet || "",
+            dhcp_enabled: liveData?.dhcpEnabled ?? false,
+            dhcp_start: liveData?.dhcpStart || "",
+            dhcp_end: liveData?.dhcpEnd || "",
+            ethernet_ports: liveData?.ethernetPorts || [],
+          },
+
+          wifi: {
+            enabled_2g: liveData?.wifiEnabled ?? true,
+            ssid_2g: liveData?.wifiSSID || cfg?.wifi?.ssid || device.ssid || "",
+            password_2g: liveData?.wifiPassword || cfg?.wifi?.password || device.wifiPassword || "",
+            channel_2g: liveData?.wifiChannel || cfg?.wifi?.channel || device.wifiChannel || "",
+            enabled_5g: liveData?.wifiEnabled5g ?? false,
+            ssid_5g: liveData?.wifiSSID5g || cfg?.wifi?.ssid5g || device.ssid5g || "",
+            password_5g: liveData?.wifiPassword5g || cfg?.wifi?.password5g || device.wifiPassword5g || "",
+            channel_5g: liveData?.wifiChannel5g || cfg?.wifi?.channel5g || device.wifiChannel5g || "",
+          },
+
+          hosts: {
+            connected: liveData?.connectedHosts || [],
+            count: liveData?.connectedHosts?.length || 0,
+          },
+
+          voip: {
+            lines: liveData?.voipLines || [],
+          },
+
+          resources: {
+            memory_free: liveData?.memoryUsage ?? null,
+            cpu_usage: liveData?.cpuUsage ?? null,
+          },
+
+          backup: cfg ? {
+            has_backup: true,
+            wifi: cfg.wifi || null,
+            wan: cfg.wan || null,
+            lan: cfg.lan || null,
+            voip: cfg.voip || null,
+            last_backup: device.lastBackupAt || null,
+          } : {
+            has_backup: false,
+          },
+        },
+      };
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
   app.get("/api/v3/device/search/", requireApiKey, async (req: Request, res: Response) => {
     try {
       const page = parseInt(req.query.page as string) || 1;
