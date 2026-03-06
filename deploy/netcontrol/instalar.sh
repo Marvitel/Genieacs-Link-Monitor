@@ -30,7 +30,7 @@ echo -e "${YELLOW}IP detectado: ${SERVER_IP}${NC}"
 echo ""
 
 check_genieacs() {
-  echo -e "${GREEN}[1/5] Verificando GenieACS existente...${NC}"
+  echo -e "${GREEN}[1/6] Verificando GenieACS existente...${NC}"
 
   NBI_PORT="${GENIEACS_NBI_PORT:-7557}"
   NBI_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:${NBI_PORT}/devices" 2>/dev/null || echo "000")
@@ -47,7 +47,7 @@ check_genieacs() {
 }
 
 check_requirements() {
-  echo -e "${GREEN}[2/5] Verificando requisitos...${NC}"
+  echo -e "${GREEN}[2/6] Verificando requisitos...${NC}"
 
   if command -v docker &> /dev/null; then
     echo -e "  ${GREEN}✓${NC} Docker: $(docker --version 2>/dev/null | head -1)"
@@ -70,7 +70,7 @@ check_requirements() {
 }
 
 setup_env() {
-  echo -e "${GREEN}[3/5] Configurando ambiente...${NC}"
+  echo -e "${GREEN}[3/6] Configurando ambiente...${NC}"
 
   if [ ! -f "${SCRIPT_DIR}/.env" ]; then
     cp "${SCRIPT_DIR}/.env.example" "${SCRIPT_DIR}/.env"
@@ -89,38 +89,97 @@ setup_env() {
   source "${SCRIPT_DIR}/.env"
 }
 
-check_ports() {
-  echo -e "${GREEN}[4/5] Verificando portas...${NC}"
+check_ssl() {
+  echo -e "${GREEN}[4/6] Verificando certificados SSL...${NC}"
 
-  NC_PORT="${NETCONTROL_PORT:-3000}"
+  DOMAIN="${DOMAIN:-flashman.marvitel.com.br}"
+  CERT_PATH="${SSL_CERT_PATH:-/etc/letsencrypt/live/${DOMAIN}}"
 
-  for PORT in ${NC_PORT} 5432; do
-    if ss -tlnp 2>/dev/null | grep -q ":${PORT} "; then
-      PROCESS=$(ss -tlnp 2>/dev/null | grep ":${PORT} " | awk '{print $6}' | head -1)
-      if echo "$PROCESS" | grep -q "docker"; then
-        echo -e "  ${YELLOW}⚠${NC} Porta ${PORT} em uso por Docker (será substituído)"
-      else
-        echo -e "  ${RED}✗${NC} Porta ${PORT} já em uso por: ${PROCESS}"
-        if [ "$PORT" = "5432" ]; then
-          echo -e "    ${YELLOW}Se já tem PostgreSQL no servidor, pode reutilizá-lo editando o .env${NC}"
-        else
-          echo -e "    ${YELLOW}Altere NETCONTROL_PORT no .env para outra porta${NC}"
-        fi
-      fi
-    else
-      echo -e "  ${GREEN}✓${NC} Porta ${PORT} disponível"
+  if [ -f "${CERT_PATH}/fullchain.pem" ] && [ -f "${CERT_PATH}/privkey.pem" ]; then
+    EXPIRY=$(openssl x509 -enddate -noout -in "${CERT_PATH}/fullchain.pem" 2>/dev/null | cut -d= -f2)
+    echo -e "  ${GREEN}✓${NC} Certificado SSL encontrado para ${DOMAIN}"
+    echo -e "    Expira em: ${EXPIRY}"
+    echo -e "    Caminho: ${CERT_PATH}"
+
+    if ! grep -q "SSL_CERT_PATH" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+      echo "SSL_CERT_PATH=${CERT_PATH}" >> "${SCRIPT_DIR}/.env"
     fi
-  done
+    if ! grep -q "COOKIE_SECURE" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+      echo "COOKIE_SECURE=true" >> "${SCRIPT_DIR}/.env"
+    else
+      sed -i "s/COOKIE_SECURE=.*/COOKIE_SECURE=true/" "${SCRIPT_DIR}/.env"
+    fi
+
+    HAS_SSL=true
+  else
+    echo -e "  ${YELLOW}⚠${NC} Certificado SSL não encontrado em ${CERT_PATH}"
+    echo -e "    O NetControl será iniciado apenas com HTTP na porta ${NETCONTROL_PORT:-3000}"
+    echo -e "    Para gerar um certificado: certbot certonly --standalone -d ${DOMAIN}"
+
+    if ! grep -q "COOKIE_SECURE" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+      echo "COOKIE_SECURE=false" >> "${SCRIPT_DIR}/.env"
+    else
+      sed -i "s/COOKIE_SECURE=.*/COOKIE_SECURE=false/" "${SCRIPT_DIR}/.env"
+    fi
+
+    HAS_SSL=false
+  fi
+}
+
+check_ports() {
+  echo -e "${GREEN}[5/6] Verificando portas...${NC}"
+
+  HTTPS_P="${HTTPS_PORT:-443}"
+  HTTP_P="${HTTP_PORT:-80}"
+
+  if [ "$HAS_SSL" = "true" ]; then
+    for PORT in ${HTTPS_P} ${HTTP_P} 5432; do
+      if ss -tlnp 2>/dev/null | grep -q ":${PORT} "; then
+        PROCESS=$(ss -tlnp 2>/dev/null | grep ":${PORT} " | awk '{print $6}' | head -1)
+        if echo "$PROCESS" | grep -q "docker"; then
+          echo -e "  ${YELLOW}⚠${NC} Porta ${PORT} em uso por Docker (será substituído)"
+        else
+          echo -e "  ${RED}✗${NC} Porta ${PORT} já em uso por: ${PROCESS}"
+          if [ "$PORT" = "${HTTPS_P}" ] || [ "$PORT" = "${HTTP_P}" ]; then
+            echo -e "    ${YELLOW}Altere HTTPS_PORT ou HTTP_PORT no .env, ou pare o serviço que usa a porta${NC}"
+          fi
+        fi
+      else
+        echo -e "  ${GREEN}✓${NC} Porta ${PORT} disponível"
+      fi
+    done
+  else
+    NC_PORT="${NETCONTROL_PORT:-3000}"
+    for PORT in ${NC_PORT} 5432; do
+      if ss -tlnp 2>/dev/null | grep -q ":${PORT} "; then
+        PROCESS=$(ss -tlnp 2>/dev/null | grep ":${PORT} " | awk '{print $6}' | head -1)
+        if echo "$PROCESS" | grep -q "docker"; then
+          echo -e "  ${YELLOW}⚠${NC} Porta ${PORT} em uso por Docker (será substituído)"
+        else
+          echo -e "  ${RED}✗${NC} Porta ${PORT} já em uso por: ${PROCESS}"
+        fi
+      else
+        echo -e "  ${GREEN}✓${NC} Porta ${PORT} disponível"
+      fi
+    done
+  fi
 }
 
 start_services() {
-  echo -e "${GREEN}[5/5] Construindo e iniciando NetControl...${NC}"
+  echo -e "${GREEN}[6/6] Construindo e iniciando NetControl...${NC}"
   echo ""
 
   cd "${SCRIPT_DIR}"
-  docker compose build --no-cache netcontrol-panel 2>&1 | tail -5
-  echo ""
-  docker compose up -d 2>&1
+
+  if [ "$HAS_SSL" = "true" ]; then
+    docker compose build --no-cache netcontrol-panel 2>&1 | tail -5
+    echo ""
+    docker compose up -d 2>&1
+  else
+    docker compose build --no-cache netcontrol-panel 2>&1 | tail -5
+    echo ""
+    docker compose up -d postgres netcontrol-panel 2>&1
+  fi
 
   echo ""
   echo -e "  Aguardando serviços iniciarem..."
@@ -130,116 +189,31 @@ start_services() {
   done
   echo ""
 
-  NC_PORT="${NETCONTROL_PORT:-3000}"
-  PANEL_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:${NC_PORT} 2>/dev/null || echo "000")
-
-  if [ "$PANEL_CODE" = "200" ] || [ "$PANEL_CODE" = "302" ]; then
-    echo -e "  ${GREEN}✓${NC} NetControl respondendo na porta ${NC_PORT}"
+  if [ "$HAS_SSL" = "true" ]; then
+    HTTPS_P="${HTTPS_PORT:-443}"
+    PANEL_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 "https://localhost:${HTTPS_P}" 2>/dev/null || echo "000")
+    if [ "$PANEL_CODE" = "200" ] || [ "$PANEL_CODE" = "302" ]; then
+      echo -e "  ${GREEN}✓${NC} NetControl respondendo com HTTPS na porta ${HTTPS_P}"
+    else
+      echo -e "  ${YELLOW}⏳${NC} NetControl ainda iniciando... (HTTP ${PANEL_CODE})"
+      echo -e "    Aguarde mais alguns segundos e teste: curl -k https://localhost:${HTTPS_P}"
+    fi
   else
-    echo -e "  ${YELLOW}⏳${NC} NetControl ainda iniciando... (HTTP ${PANEL_CODE})"
-    echo -e "    Aguarde mais alguns segundos e teste: curl http://localhost:${NC_PORT}"
+    NC_PORT="${NETCONTROL_PORT:-3000}"
+    PANEL_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:${NC_PORT}" 2>/dev/null || echo "000")
+    if [ "$PANEL_CODE" = "200" ] || [ "$PANEL_CODE" = "302" ]; then
+      echo -e "  ${GREEN}✓${NC} NetControl respondendo na porta ${NC_PORT}"
+    else
+      echo -e "  ${YELLOW}⏳${NC} NetControl ainda iniciando... (HTTP ${PANEL_CODE})"
+    fi
   fi
 
   echo ""
   docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 }
 
-generate_nginx_config() {
-  DOMAIN="${DOMAIN:-flashman.marvitel.com.br}"
-  NC_PORT="${NETCONTROL_PORT:-3000}"
-  CERT_PATH="/etc/letsencrypt/live/${DOMAIN}"
-  NGINX_CONF="${SCRIPT_DIR}/nginx/netcontrol-site.conf"
-
-  if [ -f "${CERT_PATH}/fullchain.pem" ] && [ -f "${CERT_PATH}/privkey.pem" ]; then
-    EXPIRY=$(openssl x509 -enddate -noout -in "${CERT_PATH}/fullchain.pem" 2>/dev/null | cut -d= -f2)
-    echo -e "  ${GREEN}✓${NC} Certificado SSL encontrado para ${DOMAIN}"
-    echo -e "    Expira em: ${EXPIRY}"
-
-    cat > "${NGINX_CONF}" << NGINX_SSL_EOF
-upstream netcontrol_app {
-    server 127.0.0.1:${NC_PORT};
-}
-
-server {
-    listen 80;
-    server_name ${DOMAIN};
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    location / {
-        return 301 https://\$host\$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name ${DOMAIN};
-
-    ssl_certificate ${CERT_PATH}/fullchain.pem;
-    ssl_certificate_key ${CERT_PATH}/privkey.pem;
-
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5:!RC4;
-    ssl_prefer_server_ciphers on;
-
-    client_max_body_size 50m;
-
-    location / {
-        proxy_pass http://netcontrol_app;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-    }
-}
-NGINX_SSL_EOF
-
-    HAS_SSL=true
-  else
-    echo -e "  ${YELLOW}ℹ${NC} Sem certificado SSL para ${DOMAIN}"
-    echo -e "    NetControl acessível apenas em http://${SERVER_IP}:${NC_PORT}"
-
-    cat > "${NGINX_CONF}" << NGINX_NOSSL_EOF
-upstream netcontrol_app {
-    server 127.0.0.1:${NC_PORT};
-}
-
-server {
-    listen 80;
-    server_name ${DOMAIN};
-
-    client_max_body_size 50m;
-
-    location / {
-        proxy_pass http://netcontrol_app;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-    }
-}
-NGINX_NOSSL_EOF
-
-    HAS_SSL=false
-  fi
-
-  echo -e "  ${GREEN}✓${NC} Config Nginx gerada em: ${NGINX_CONF}"
-}
-
 show_info() {
-  NC_PORT="${NETCONTROL_PORT:-3000}"
   DOMAIN="${DOMAIN:-flashman.marvitel.com.br}"
-  CERT_PATH="/etc/letsencrypt/live/${DOMAIN}"
 
   echo ""
   echo -e "${CYAN}╔═══════════════════════════════════════════════╗${NC}"
@@ -247,7 +221,19 @@ show_info() {
   echo -e "${CYAN}╚═══════════════════════════════════════════════╝${NC}"
   echo ""
   echo -e "${BOLD}Acesso ao NetControl:${NC}"
-  echo -e "  ${GREEN}●${NC} HTTP direto:  ${CYAN}http://${SERVER_IP}:${NC_PORT}${NC}"
+  if [ "$HAS_SSL" = "true" ]; then
+    HTTPS_P="${HTTPS_PORT:-443}"
+    if [ "$HTTPS_P" = "443" ]; then
+      echo -e "  ${GREEN}●${NC} HTTPS: ${CYAN}https://${DOMAIN}${NC}"
+    else
+      echo -e "  ${GREEN}●${NC} HTTPS: ${CYAN}https://${DOMAIN}:${HTTPS_P}${NC}"
+    fi
+    echo -e "  ${GREEN}●${NC} HTTP redireciona automaticamente para HTTPS"
+  else
+    NC_PORT="${NETCONTROL_PORT:-3000}"
+    echo -e "  ${GREEN}●${NC} HTTP: ${CYAN}http://${SERVER_IP}:${NC_PORT}${NC}"
+    echo -e "  ${YELLOW}⚠${NC} Sem HTTPS. Para ativar, instale certificado SSL e reconfigure."
+  fi
   echo ""
   echo -e "${BOLD}Login padrão:${NC}"
   echo -e "  Usuário: ${CYAN}admin${NC}"
@@ -258,30 +244,12 @@ show_info() {
   echo -e "  ${GREEN}●${NC} NBI API:  http://localhost:${GENIEACS_NBI_PORT:-7557}"
   echo -e "  ${GREEN}●${NC} CWMP:     ${CWMP_URL:-https://flashman.marvitel.com.br:7547}"
   echo ""
-
-  echo -e "${BOLD}Configurar Nginx (opcional):${NC}"
-  echo -e "  Um arquivo de configuração foi gerado em:"
-  echo -e "  ${CYAN}${SCRIPT_DIR}/nginx/netcontrol-site.conf${NC}"
-  echo ""
-
-  if [ -f "${CERT_PATH}/fullchain.pem" ]; then
-    echo -e "  Para ativar HTTPS via Nginx do servidor:"
-    echo -e "  ${CYAN}sudo cp ${SCRIPT_DIR}/nginx/netcontrol-site.conf /etc/nginx/sites-available/netcontrol${NC}"
-    echo -e "  ${CYAN}sudo ln -sf /etc/nginx/sites-available/netcontrol /etc/nginx/sites-enabled/${NC}"
-    echo -e "  ${CYAN}sudo nginx -t && sudo systemctl reload nginx${NC}"
-    echo ""
-    echo -e "  Após configurar o Nginx, acesse:"
-    echo -e "  ${CYAN}https://${DOMAIN}${NC}"
-  else
-    echo -e "  Se quiser colocar atrás do Nginx existente:"
-    echo -e "  ${CYAN}sudo cp ${SCRIPT_DIR}/nginx/netcontrol-site.conf /etc/nginx/sites-available/netcontrol${NC}"
-    echo -e "  ${CYAN}sudo ln -sf /etc/nginx/sites-available/netcontrol /etc/nginx/sites-enabled/${NC}"
-    echo -e "  ${CYAN}sudo nginx -t && sudo systemctl reload nginx${NC}"
-  fi
-
-  echo ""
   echo -e "${BOLD}Link Monitor - Configure apontando para:${NC}"
-  echo -e "  URL da API:  ${CYAN}http://${SERVER_IP}:${NC_PORT}${NC}"
+  if [ "$HAS_SSL" = "true" ]; then
+    echo -e "  URL da API:  ${CYAN}https://${DOMAIN}${NC}"
+  else
+    echo -e "  URL da API:  ${CYAN}http://${SERVER_IP}:${NC_PORT}${NC}"
+  fi
   echo -e "  Usuário:     ${CYAN}(usuário do NetControl)${NC}"
   echo -e "  Senha:       ${CYAN}(senha do NetControl)${NC}"
   echo -e "  ${YELLOW}O Link Monitor usa autenticação Basic (usuário:senha)${NC}"
@@ -289,17 +257,18 @@ show_info() {
   echo -e "${BOLD}Comandos úteis:${NC}"
   echo -e "  Ver logs:       ${CYAN}cd ${SCRIPT_DIR} && docker compose logs -f${NC}"
   echo -e "  Logs painel:    ${CYAN}cd ${SCRIPT_DIR} && docker compose logs -f netcontrol-panel${NC}"
+  echo -e "  Logs nginx:     ${CYAN}cd ${SCRIPT_DIR} && docker compose logs -f nginx${NC}"
   echo -e "  Reiniciar:      ${CYAN}cd ${SCRIPT_DIR} && docker compose restart${NC}"
   echo -e "  Parar:          ${CYAN}cd ${SCRIPT_DIR} && docker compose down${NC}"
   echo -e "  Status:         ${CYAN}cd ${SCRIPT_DIR} && docker compose ps${NC}"
-  echo -e "  Atualizar:      ${CYAN}cd ${SCRIPT_DIR} && bash atualizar.sh${NC}"
+  echo -e "  Atualizar:      ${CYAN}cd ${SCRIPT_DIR} && docker compose logs -f${NC}"
   echo ""
 }
 
 check_genieacs
 check_requirements
 setup_env
+check_ssl
 check_ports
 start_services
-generate_nginx_config
 show_info

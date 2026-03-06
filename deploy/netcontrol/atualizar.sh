@@ -17,6 +17,10 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+if [ -f "${SCRIPT_DIR}/.env" ]; then
+  source "${SCRIPT_DIR}/.env"
+fi
+
 echo -e "${GREEN}[1/4] Buscando atualizações...${NC}"
 cd "$PROJECT_DIR"
 git fetch origin
@@ -50,14 +54,33 @@ echo -e "${GREEN}[4/4] Verificando status...${NC}"
 sleep 10
 docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
-NC_PORT=$(grep "^NETCONTROL_PORT=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d= -f2 || echo "3000")
-NC_PORT="${NC_PORT:-3000}"
+DOMAIN="${DOMAIN:-flashman.marvitel.com.br}"
+SSL_PATH="${SSL_CERT_PATH:-/etc/letsencrypt/live/${DOMAIN}}"
+HTTPS_P="${HTTPS_PORT:-443}"
 
-PANEL_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:${NC_PORT} 2>/dev/null || echo "000")
-if [ "$PANEL_CODE" = "200" ] || [ "$PANEL_CODE" = "302" ]; then
-  echo -e "  ${GREEN}✓${NC} NetControl respondendo"
+if [ -f "${SSL_PATH}/fullchain.pem" ]; then
+  PANEL_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 "https://localhost:${HTTPS_P}" 2>/dev/null || echo "000")
+  if [ "$PANEL_CODE" = "200" ] || [ "$PANEL_CODE" = "302" ]; then
+    echo -e "  ${GREEN}✓${NC} NetControl respondendo com HTTPS"
+  else
+    echo -e "  ${YELLOW}⏳${NC} Aguardando inicialização... (HTTP ${PANEL_CODE})"
+  fi
+  echo ""
+  if [ "$HTTPS_P" = "443" ]; then
+    echo -e "  Acesse: ${CYAN}https://${DOMAIN}${NC}"
+  else
+    echo -e "  Acesse: ${CYAN}https://${DOMAIN}:${HTTPS_P}${NC}"
+  fi
 else
-  echo -e "  ${YELLOW}⏳${NC} Aguardando inicialização..."
+  NC_PORT="${NETCONTROL_PORT:-3000}"
+  PANEL_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:${NC_PORT}" 2>/dev/null || echo "000")
+  if [ "$PANEL_CODE" = "200" ] || [ "$PANEL_CODE" = "302" ]; then
+    echo -e "  ${GREEN}✓${NC} NetControl respondendo"
+  else
+    echo -e "  ${YELLOW}⏳${NC} Aguardando inicialização..."
+  fi
+  echo ""
+  echo -e "  Acesse: ${CYAN}http://localhost:${NC_PORT}${NC}"
 fi
 
 echo ""
@@ -67,4 +90,5 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 echo -e "${YELLOW}Para ver os logs:${NC}"
 echo -e "  ${CYAN}cd ${SCRIPT_DIR} && docker compose logs -f netcontrol-panel${NC}"
+echo -e "  ${CYAN}cd ${SCRIPT_DIR} && docker compose logs -f nginx${NC}"
 echo ""
