@@ -1,0 +1,41 @@
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# docker compose logs --tail=20 netcontrol-panel | grep -E "Auth Debug|v2|v3"
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# docker compose logs --tail=20 netcontrol-panel | grep -E "Auth Debug|v2|v3"
+netcontrol-panel  | 8:08:16 PM [express] GET /api/v3/device/pppoe-username/mpse.riachao/ 401 in 38ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:08:28 PM [express] GET /api/v3/device/serial-tr069/DACM917482E2/ 401 in 30ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:08:28 PM [express] GET /api/v2/device/update/DACM917482E2 401 in 4ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:08:28 PM [express] GET /api/v3/device/serial-pon/DACM917482E2/ 200 in 3ms
+netcontrol-panel  | 8:08:28 PM [express] GET /api/v3/device/pppoe-username/guarita/ 401 in 4ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:08:28 PM [express] GET /api/v3/device/mac/70%3ACD%3A91%3A74%3A82%3AE3/ 401 in 4ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:08:28 PM [express] GET /api/v2/device/update/70:CD:91:74:82:E3 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# docker compose logs --tail=30 netcontrol-panel | grep -E "v2|v3"
+netcontrol-panel  | 8:19:53 PM [express] GET /api/v3/device/pppoe-username/maui_casa87/ 401 in 1ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:53 PM [express] GET /api/v3/device/pppoe-username/mpse.laranjeiras/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:54 PM [express] GET /api/v3/device/serial-pon/ITBS0DC3BD2E/ 200 in 2ms
+netcontrol-panel  | 8:19:54 PM [express] GET /api/v3/device/serial-tr069/ITBS0DC3BD2E/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:54 PM [express] GET /api/v2/device/update/ITBS0DC3BD2E 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:54 PM [express] GET /api/v3/device/pppoe-username/maui_casa13/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:55 PM [express] GET /api/v3/device/serial-pon/ITBS3240B4BD/ 200 in 3ms
+netcontrol-panel  | 8:19:55 PM [express] GET /api/v3/device/serial-tr069/ITBS3240B4BD/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:55 PM [express] GET /api/v2/device/update/ITBS3240B4BD 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:55 PM [express] GET /api/v3/device/pppoe-username/maui_casa85/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:57 PM [express] GET /api/v3/device/serial-pon/ITBS5FF75CC7/ 200 in 2ms
+netcontrol-panel  | 8:19:57 PM [express] GET /api/v3/device/serial-tr069/ITBS5FF75CC7/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:57 PM [express] GET /api/v2/device/update/ITBS5FF75CC7 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:57 PM [express] GET /api/v3/device/pppoe-username/maui_casa30/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v3/device/serial-pon/ITBS5FF711B8/ 200 in 2ms
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v3/device/serial-tr069/ITBS5FF711B8/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v2/device/update/ITBS5FF711B8 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v3/device/pppoe-username/maui_casa43/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v3/device/serial-pon/ITBS5F731B97/ 200 in 3ms
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v3/device/serial-tr069/ITBS5F731B97/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v3/device/serial-pon/ITBS5FFD4ABE/ 200 in 2ms
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v3/device/serial-tr069/ITBS5FFD4ABE/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v2/device/update/ITBS5FFD4ABE 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v2/device/update/ITBS5F731B97 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v3/device/pppoe-username/maui_casa54/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:19:59 PM [express] GET /api/v3/device/pppoe-username/2805marcelalemos/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:20:09 PM [express] GET /api/v3/device/serial-pon/DACM916CF5CC/ 200 in 3ms
+netcontrol-panel  | 8:20:09 PM [express] GET /api/v3/device/serial-tr069/DACM916CF5CC/ 401 in 24ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:20:09 PM [express] GET /api/v2/device/update/DACM916CF5CC 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:20:09 PM [express] GET /api/v3/device/pppoe-username/cemise%40derma/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# 
