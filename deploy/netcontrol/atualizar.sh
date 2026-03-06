@@ -19,6 +19,29 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 if [ -f "${SCRIPT_DIR}/.env" ]; then
   source "${SCRIPT_DIR}/.env"
+
+  DOMAIN="${DOMAIN:-flashman.marvitel.com.br}"
+  if ! grep -q "SSL_CERT_PATH" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+    echo "" >> "${SCRIPT_DIR}/.env"
+    echo "SSL_CERT_PATH=/etc/letsencrypt/live/${DOMAIN}" >> "${SCRIPT_DIR}/.env"
+    echo -e "  ${YELLOW}+${NC} Adicionado SSL_CERT_PATH ao .env"
+  fi
+  if ! grep -q "COOKIE_SECURE" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+    echo "COOKIE_SECURE=true" >> "${SCRIPT_DIR}/.env"
+    echo -e "  ${YELLOW}+${NC} Adicionado COOKIE_SECURE ao .env"
+  fi
+  if ! grep -q "HTTPS_PORT" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+    echo "HTTPS_PORT=443" >> "${SCRIPT_DIR}/.env"
+    echo -e "  ${YELLOW}+${NC} Adicionado HTTPS_PORT ao .env"
+  fi
+  if ! grep -q "HTTP_PORT" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+    echo "HTTP_PORT=80" >> "${SCRIPT_DIR}/.env"
+    echo -e "  ${YELLOW}+${NC} Adicionado HTTP_PORT ao .env"
+  fi
+
+  sed -i "s/COOKIE_SECURE=false/COOKIE_SECURE=true/" "${SCRIPT_DIR}/.env"
+
+  source "${SCRIPT_DIR}/.env"
 fi
 
 echo -e "${GREEN}[1/4] Buscando atualizações...${NC}"
