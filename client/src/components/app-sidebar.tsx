@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import {
   LayoutDashboard,
@@ -12,6 +13,8 @@ import {
   LogOut,
   UserCog,
   Shield,
+  KeyRound,
+  Loader2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -28,6 +31,11 @@ import {
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { AuthUser } from "@/App";
 
 const mainItems = [
@@ -51,6 +59,40 @@ interface AppSidebarProps {
 export function AppSidebar({ user, onLogout }: AppSidebarProps) {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { toast } = useToast();
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      toast({ title: "Erro", description: "Preencha todos os campos", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 4) {
+      toast({ title: "Erro", description: "A nova senha deve ter no mínimo 4 caracteres", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Erro", description: "As senhas não coincidem", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await apiRequest("POST", "/api/auth/change-password", { currentPassword, newPassword });
+      toast({ title: "Senha alterada com sucesso" });
+      setPasswordDialogOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message?.replace(/^\d+:\s*/, "").replace(/[{}"]/g, "").replace("message:", "").trim() || "Falha ao alterar senha", variant: "destructive" });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   return (
     <Sidebar>
@@ -132,24 +174,88 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
           <Button
             size="sm"
             variant="ghost"
-            onClick={onLogout}
+            onClick={() => setPasswordDialogOpen(true)}
             className="text-xs gap-1 h-7"
-            data-testid="button-logout"
+            data-testid="button-change-password"
           >
-            <LogOut className="w-3 h-3" />
-            Sair
+            <KeyRound className="w-3 h-3" />
+            Trocar Senha
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={toggleTheme}
-            className="h-7 w-7"
-            data-testid="button-theme-toggle"
-          >
-            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onLogout}
+              className="text-xs gap-1 h-7"
+              data-testid="button-logout"
+            >
+              <LogOut className="w-3 h-3" />
+              Sair
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={toggleTheme}
+              className="h-7 w-7"
+              data-testid="button-theme-toggle"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </Button>
+          </div>
         </div>
       </SidebarFooter>
+
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Trocar Senha</DialogTitle>
+            <DialogDescription>Altere sua senha de acesso ao sistema</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Senha Atual</Label>
+              <Input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Digite sua senha atual"
+                data-testid="input-current-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Nova Senha</Label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Digite a nova senha (mínimo 4 caracteres)"
+                data-testid="input-new-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Confirmar Nova Senha</Label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repita a nova senha"
+                data-testid="input-confirm-password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPasswordDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+              data-testid="button-save-password"
+            >
+              {changingPassword && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+              Alterar Senha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sidebar>
   );
 }

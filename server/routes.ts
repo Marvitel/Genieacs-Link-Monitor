@@ -143,6 +143,18 @@ export async function registerRoutes(
     res.json({ id: user.id, username: user.username, displayName: user.displayName, role: user.role });
   });
 
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(4) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Senha atual e nova senha são obrigatórias (mínimo 4 caracteres)" });
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(404).json({ message: "Usuário não encontrado" });
+    const valid = await bcrypt.compare(parsed.data.currentPassword, user.password);
+    if (!valid) return res.status(400).json({ message: "Senha atual incorreta" });
+    await storage.updateUser(user.id, { password: await bcrypt.hash(parsed.data.newPassword, 10) });
+    res.json({ message: "Senha alterada com sucesso" });
+  });
+
   app.get("/api/users", requireAdmin, async (_req, res) => {
     const allUsers = await storage.getAllUsers();
     const safe = allUsers.map(u => ({ id: u.id, username: u.username, displayName: u.displayName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt, createdAt: u.createdAt }));
