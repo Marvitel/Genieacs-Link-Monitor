@@ -126,7 +126,10 @@ export async function registerRoutes(
     req.session.username = user.username;
     req.session.role = user.role;
     req.session.save((err) => {
-      if (err) return res.status(500).json({ message: "Erro ao salvar sessão" });
+      if (err) {
+        console.error("Session save error:", err);
+        return res.status(500).json({ message: "Erro ao salvar sessão", detail: String(err) });
+      }
       res.json({ id: user.id, username: user.username, displayName: user.displayName, role: user.role });
     });
   });
