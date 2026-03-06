@@ -72,8 +72,14 @@ function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const { data, isLoading } = useQuery<AuthUser>({
+  const { data, isLoading, isError } = useQuery<AuthUser>({
     queryKey: ["/api/auth/me"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error("Failed to check auth");
+      return res.json();
+    },
     retry: false,
     staleTime: Infinity,
   });
@@ -85,7 +91,7 @@ function App() {
       }
       setLoading(false);
     }
-  }, [data, isLoading]);
+  }, [data, isLoading, isError]);
 
   const handleLogin = (userData: AuthUser) => {
     setUser(userData);
