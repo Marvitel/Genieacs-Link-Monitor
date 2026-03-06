@@ -39,6 +39,41 @@ function handleGenieError(error: unknown, res: import("express").Response) {
   return res.status(502).json({ message: `Erro ao comunicar com GenieACS: ${message}` });
 }
 
+function countConfigSections(config: SavedDeviceConfig | null | undefined): number {
+  if (!config) return 0;
+  let count = 0;
+  if (config.wifi && (config.wifi.ssid || config.wifi.ssid5g)) count++;
+  if (config.pppoe && config.pppoe.username) count++;
+  if (config.lan && (config.lan.lanIp || config.lan.dhcpStart)) count++;
+  if (config.voip && config.voip.length > 0) count++;
+  return count;
+}
+
+function buildBackupFromBasicInfo(info: { ssid?: string; ssid5g?: string; wifiPassword?: string; wifiPassword5g?: string; wifiChannel?: string; wifiChannel5g?: string; pppoeUser?: string; connectionType?: string }): SavedDeviceConfig {
+  const config: SavedDeviceConfig = {};
+  if (info.ssid || info.ssid5g) {
+    config.wifi = {};
+    if (info.ssid) config.wifi.ssid = info.ssid;
+    if (info.wifiPassword) config.wifi.password = info.wifiPassword;
+    if (info.ssid5g) config.wifi.ssid5g = info.ssid5g;
+    if (info.wifiPassword5g) config.wifi.password5g = info.wifiPassword5g;
+    if (info.wifiChannel) config.wifi.channel = parseInt(info.wifiChannel) || undefined;
+    if (info.wifiChannel5g) config.wifi.channel5g = parseInt(info.wifiChannel5g) || undefined;
+  }
+  if (info.pppoeUser) {
+    config.pppoe = { username: info.pppoeUser };
+  }
+  return config;
+}
+
+function shouldUpdateBackup(existingConfig: SavedDeviceConfig | null | undefined, newConfig: SavedDeviceConfig): boolean {
+  const newSections = countConfigSections(newConfig);
+  if (newSections === 0) return false;
+  const existingSections = countConfigSections(existingConfig as SavedDeviceConfig);
+  if (existingSections > newSections) return false;
+  return true;
+}
+
 const setParameterSchema = z.object({
   parameterPath: z.string().min(1, "parameterPath é obrigatório"),
   value: z.union([z.string(), z.number(), z.boolean()]),
@@ -1124,11 +1159,13 @@ export async function registerRoutes(
     try {
       const genieDevices = await genieGetDevices();
       let synced = 0;
+      let autoBackups = 0;
+      const allDevices = await storage.getDevices();
       for (const gDevice of genieDevices) {
         const info = extractDeviceInfo(gDevice);
         if (!info.serialNumber) continue;
 
-        const existing = (await storage.getDevices()).find(
+        const existing = allDevices.find(
           (d) => d.serialNumber === info.serialNumber
         );
 
@@ -1136,7 +1173,7 @@ export async function registerRoutes(
         const uptimeStr = info.uptime ? `${Math.floor(Number(info.uptime) / 86400)}d ${Math.floor((Number(info.uptime) % 86400) / 3600)}h` : null;
 
         if (existing) {
-          await storage.updateDevice(existing.id, {
+          const updates: Record<string, unknown> = {
             genieId: info.genieId,
             status: isOnline ? "online" : "offline",
             firmwareVersion: info.firmwareVersion || existing.firmwareVersion,
@@ -1157,14 +1194,42 @@ export async function registerRoutes(
             connectionType: info.connectionType || existing.connectionType,
             lastSeen: info.lastInform ? new Date(info.lastInform) : existing.lastSeen,
             uptime: uptimeStr || existing.uptime,
-          });
+          };
+
+          if (isOnline) {
+            const mergedInfo = {
+              ssid: (info.ssid || existing.ssid) ?? undefined,
+              ssid5g: (info.ssid5g || existing.ssid5g) ?? undefined,
+              wifiPassword: (info.wifiPassword || existing.wifiPassword) ?? undefined,
+              wifiPassword5g: (info.wifiPassword5g || existing.wifiPassword5g) ?? undefined,
+              wifiChannel: (info.wifiChannel || existing.wifiChannel) ?? undefined,
+              wifiChannel5g: (info.wifiChannel5g || existing.wifiChannel5g) ?? undefined,
+              pppoeUser: (info.pppoeUser || existing.pppoeUser) ?? undefined,
+            };
+            const newBackup = buildBackupFromBasicInfo(mergedInfo);
+            if (shouldUpdateBackup(existing.savedConfig as SavedDeviceConfig, newBackup)) {
+              const existingCfg = (existing.savedConfig || {}) as SavedDeviceConfig;
+              if (existingCfg.lan) newBackup.lan = existingCfg.lan;
+              if (existingCfg.voip && (!newBackup.voip || newBackup.voip.length === 0)) newBackup.voip = existingCfg.voip;
+              if (existingCfg.pppoe?.wanDeviceIndex && newBackup.pppoe && !newBackup.pppoe.wanDeviceIndex) {
+                newBackup.pppoe.wanDeviceIndex = existingCfg.pppoe.wanDeviceIndex;
+                newBackup.pppoe.wcdIndex = existingCfg.pppoe.wcdIndex;
+                newBackup.pppoe.connIndex = existingCfg.pppoe.connIndex;
+              }
+              updates.savedConfig = newBackup as unknown as Record<string, unknown>;
+              updates.savedConfigAt = new Date();
+              autoBackups++;
+            }
+          }
+
+          await storage.updateDevice(existing.id, updates);
         } else {
           let deviceType: string = "ont";
           const mfr = info.manufacturer.toLowerCase();
           if (mfr.includes("mikrotik")) deviceType = "router";
           else if (mfr.includes("ruijie")) deviceType = "mesh";
 
-          await storage.createDevice({
+          const newDeviceData: Record<string, unknown> = {
             genieId: info.genieId,
             serialNumber: info.serialNumber,
             model: info.model || "Unknown",
@@ -1189,11 +1254,127 @@ export async function registerRoutes(
             voltage: info.voltage,
             lastSeen: info.lastInform ? new Date(info.lastInform) : null,
             uptime: uptimeStr,
-          });
+          };
+
+          if (isOnline) {
+            const initialBackup = buildBackupFromBasicInfo({
+              ssid: info.ssid || undefined,
+              ssid5g: info.ssid5g || undefined,
+              wifiPassword: info.wifiPassword || undefined,
+              wifiPassword5g: info.wifiPassword5g || undefined,
+              wifiChannel: info.wifiChannel || undefined,
+              wifiChannel5g: info.wifiChannel5g || undefined,
+              pppoeUser: info.pppoeUser || undefined,
+            });
+            if (countConfigSections(initialBackup) > 0) {
+              newDeviceData.savedConfig = initialBackup as unknown as Record<string, unknown>;
+              newDeviceData.savedConfigAt = new Date();
+              autoBackups++;
+            }
+          }
+
+          await storage.createDevice(newDeviceData as Parameters<typeof storage.createDevice>[0]);
         }
         synced++;
       }
-      res.json({ message: `Sincronização concluída: ${synced} dispositivos processados`, synced });
+      res.json({
+        message: `Sincronização concluída: ${synced} dispositivos processados, ${autoBackups} backups automáticos`,
+        synced,
+        autoBackups,
+      });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.post("/api/devices/bulk-backup", async (_req, res) => {
+    try {
+      const devices = await storage.getDevices();
+      const genieDevices = devices.filter(d => d.genieId && d.status === "online");
+      let backed = 0;
+      let skipped = 0;
+      let failed = 0;
+      const BATCH_SIZE = 5;
+
+      for (let i = 0; i < genieDevices.length; i += BATCH_SIZE) {
+        const batch = genieDevices.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(async (device) => {
+            try {
+              const genieDevice = await genieGetDevice(device.genieId!);
+              if (!genieDevice) { skipped++; return; }
+              const liveData = extractLiveDeviceInfo(genieDevice);
+
+              const savedConfig: SavedDeviceConfig = {};
+              if (liveData.ssid || liveData.ssid5g || liveData.wifiPassword || liveData.wifiPassword5g) {
+                savedConfig.wifi = {};
+                if (liveData.ssid) savedConfig.wifi.ssid = liveData.ssid;
+                if (liveData.wifiPassword) savedConfig.wifi.password = liveData.wifiPassword;
+                if (liveData.ssid5g) savedConfig.wifi.ssid5g = liveData.ssid5g;
+                if (liveData.wifiPassword5g) savedConfig.wifi.password5g = liveData.wifiPassword5g;
+                if (liveData.wifiChannel) savedConfig.wifi.channel = parseInt(liveData.wifiChannel) || undefined;
+                if (liveData.wifiChannel5g) savedConfig.wifi.channel5g = parseInt(liveData.wifiChannel5g) || undefined;
+              }
+              const pppoeConn = liveData.wanConnections?.find((w: { type: string; username?: string }) => w.type === "PPPoE" && w.username);
+              if (pppoeConn) {
+                savedConfig.pppoe = { username: pppoeConn.username, wanDeviceIndex: pppoeConn.wanDeviceIndex, wcdIndex: pppoeConn.wcdIndex, connIndex: pppoeConn.connIndex };
+              } else if (device.pppoeUser) {
+                savedConfig.pppoe = { username: device.pppoeUser };
+              }
+              if (liveData.lanIp || liveData.dhcpStart) {
+                savedConfig.lan = {};
+                if (liveData.lanIp) savedConfig.lan.lanIp = liveData.lanIp;
+                if (liveData.lanSubnet) savedConfig.lan.lanSubnet = liveData.lanSubnet;
+                if (liveData.dhcpEnabled !== undefined) savedConfig.lan.dhcpEnabled = liveData.dhcpEnabled;
+                if (liveData.dhcpStart) savedConfig.lan.dhcpStart = liveData.dhcpStart;
+                if (liveData.dhcpEnd) savedConfig.lan.dhcpEnd = liveData.dhcpEnd;
+              }
+              if (liveData.voipLines?.length > 0) {
+                savedConfig.voip = liveData.voipLines
+                  .filter((l: { enabled?: boolean; directoryNumber?: string; sipAuthUser?: string }) => l.enabled || l.directoryNumber || l.sipAuthUser)
+                  .map((l: Record<string, unknown>) => ({
+                    profileIndex: l.profileIndex as number, lineIndex: l.lineIndex as number, enabled: l.enabled as boolean,
+                    directoryNumber: l.directoryNumber as string, sipAuthUser: l.sipAuthUser as string, sipAuthPassword: l.sipAuthPassword as string,
+                    sipUri: l.sipUri as string, sipRegistrar: l.sipRegistrar as string, sipRegistrarPort: l.sipRegistrarPort as number,
+                    sipProxyServer: l.sipProxyServer as string, sipProxyPort: l.sipProxyPort as number,
+                    sipOutboundProxy: l.sipOutboundProxy as string, sipOutboundProxyPort: l.sipOutboundProxyPort as number,
+                    sipDomain: l.sipDomain as string,
+                  }));
+              }
+
+              if (!shouldUpdateBackup(device.savedConfig as SavedDeviceConfig, savedConfig)) {
+                skipped++;
+                return;
+              }
+
+              const existingCfg = (device.savedConfig || {}) as SavedDeviceConfig;
+              if (existingCfg.lan && !savedConfig.lan) savedConfig.lan = existingCfg.lan;
+              if (existingCfg.voip && (!savedConfig.voip || savedConfig.voip.length === 0)) savedConfig.voip = existingCfg.voip;
+              if (existingCfg.pppoe?.wanDeviceIndex && savedConfig.pppoe && !savedConfig.pppoe.wanDeviceIndex) {
+                savedConfig.pppoe.wanDeviceIndex = existingCfg.pppoe.wanDeviceIndex;
+                savedConfig.pppoe.wcdIndex = existingCfg.pppoe.wcdIndex;
+                savedConfig.pppoe.connIndex = existingCfg.pppoe.connIndex;
+              }
+
+              await storage.updateDevice(device.id, {
+                savedConfig: savedConfig as unknown as Record<string, unknown>,
+                savedConfigAt: new Date(),
+              } as Record<string, unknown>);
+              backed++;
+            } catch {
+              failed++;
+            }
+          })
+        );
+      }
+
+      res.json({
+        message: `Backup em massa: ${backed} salvos, ${skipped} ignorados, ${failed} falhas`,
+        backed,
+        skipped,
+        failed,
+        total: genieDevices.length,
+      });
     } catch (error) {
       handleGenieError(error, res);
     }

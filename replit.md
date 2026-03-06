@@ -157,7 +157,10 @@ Sends 4 groups of getParameterValues tasks to force full data refresh:
 ### Config Backup & Restore
 - `POST /api/devices/:id/backup-config` - Captures current live config (WiFi, PPPoE, LAN, VoIP) from GenieACS
 - `POST /api/devices/:id/restore-config` - Pushes saved config to device via TR-069 setParameterValues tasks
+- `POST /api/devices/bulk-backup` - Backup em massa de todos os dispositivos online (rate limited, 5 por vez)
 - Auto-save: WiFi and PPPoE config changes automatically update `savedConfig` field
+- Auto-backup during sync: When sync runs, online devices get their config auto-backed up from basic data (WiFi SSID, PPPoE user)
+- **Safety rules**: Never overwrites a backup that has MORE sections than the new one. Preserves LAN/VoIP/PPPoE WAN indices from existing backups. Only saves if there's at least 1 real config section (WiFi or PPPoE)
 - Device schema: `savedConfig` (JSONB), `savedConfigAt` (timestamp)
 
 ### ONT Migration/Replacement

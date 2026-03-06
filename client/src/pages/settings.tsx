@@ -22,6 +22,7 @@ import {
   Zap,
   FileCode,
   Settings2,
+  Download,
 } from "lucide-react";
 
 interface SetupStatus {
@@ -56,12 +57,29 @@ export default function Settings() {
       const res = await apiRequest("POST", "/api/genieacs/sync");
       return res.json();
     },
-    onSuccess: (data: { message: string; synced: number }) => {
-      toast({ title: "Sincronização concluída", description: data.message });
+    onSuccess: (data: { message: string; synced: number; autoBackups?: number }) => {
+      const desc = data.autoBackups
+        ? `${data.message} (${data.autoBackups} backups automáticos)`
+        : data.message;
+      toast({ title: "Sincronização concluída", description: desc });
       queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
     },
     onError: (error: Error) => {
       toast({ title: "Erro na sincronização", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const bulkBackupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/devices/bulk-backup");
+      return res.json();
+    },
+    onSuccess: (data: { message: string; backed: number; skipped: number; failed: number; total: number }) => {
+      toast({ title: "Backup em massa concluído", description: data.message });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro no backup em massa", description: error.message, variant: "destructive" });
     },
   });
 
@@ -175,12 +193,28 @@ export default function Settings() {
                 <Button
                   variant="default"
                   onClick={() => syncMutation.mutate()}
-                  disabled={syncMutation.isPending || !isConnected}
+                  disabled={syncMutation.isPending || bulkBackupMutation.isPending || !isConnected}
                   data-testid="button-sync-genieacs"
                 >
                   <RefreshCw className={`w-4 h-4 mr-1 ${syncMutation.isPending ? "animate-spin" : ""}`} />
                   {syncMutation.isPending ? "Sincronizando..." : "Sincronizar"}
                 </Button>
+              </div>
+              <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => bulkBackupMutation.mutate()}
+                  disabled={bulkBackupMutation.isPending || syncMutation.isPending || !isConnected}
+                  data-testid="button-bulk-backup"
+                >
+                  <Download className={`w-4 h-4 mr-1 ${bulkBackupMutation.isPending ? "animate-spin" : ""}`} />
+                  {bulkBackupMutation.isPending ? "Fazendo backup..." : "Backup em Massa (todos os CPEs)"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Salva WiFi, PPPoE, LAN e VoIP de todos os dispositivos online. Backups existentes com mais dados não são sobrescritos.
+                  A sincronização também faz backup automático dos dados básicos.
+                </p>
               </div>
             </CardContent>
           </Card>
