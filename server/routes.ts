@@ -1312,6 +1312,27 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/genieacs/clear-seed-data", requireAdmin, async (_req, res) => {
+    try {
+      const allDevices = await storage.getDevices();
+      const seedDevices = allDevices.filter(d => !d.genieId);
+      for (const d of seedDevices) {
+        await storage.deleteDevice(d.id);
+      }
+      const allClients = await storage.getClients();
+      for (const c of allClients) {
+        const clientDevices = allDevices.filter(d => d.clientId === c.id);
+        const hasRealDevices = clientDevices.some(d => d.genieId);
+        if (!hasRealDevices && clientDevices.length > 0 && clientDevices.every(d => !d.genieId)) {
+          await storage.deleteClient(c.id);
+        }
+      }
+      res.json({ message: `Dados fictícios removidos: ${seedDevices.length} dispositivos`, removed: seedDevices.length });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/genieacs/sync", async (_req, res) => {
     try {
       const genieDevices = await genieGetDevices();

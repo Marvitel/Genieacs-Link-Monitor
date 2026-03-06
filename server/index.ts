@@ -84,7 +84,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await seedDatabase().catch(console.error);
+  if (process.env.NODE_ENV !== "production") {
+    await seedDatabase().catch(console.error);
+  }
   await ensureAdminExists().catch(console.error);
   await registerRoutes(httpServer, app);
 

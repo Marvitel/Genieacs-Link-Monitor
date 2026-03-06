@@ -166,6 +166,21 @@ export default function Settings() {
     },
   });
 
+  const clearSeedMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/genieacs/clear-seed-data");
+      return res.json();
+    },
+    onSuccess: (data: { message: string; removed: number }) => {
+      toast({ title: "Dados fictícios removidos", description: data.message });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    },
+  });
+
   const setupMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/genieacs/setup", { informInterval: parseInt(informInterval) || 300 });
@@ -373,6 +388,27 @@ export default function Settings() {
                 </Button>
                 <p className="text-xs text-muted-foreground">
                   Salva WiFi, PPPoE, LAN e VoIP de todos os dispositivos online.
+                </p>
+              </div>
+              <Separator />
+              <div className="space-y-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    if (confirm("Remover todos os dispositivos e clientes fictícios (sem vínculo ao GenieACS)?")) {
+                      clearSeedMutation.mutate();
+                    }
+                  }}
+                  disabled={clearSeedMutation.isPending}
+                  data-testid="button-clear-seed"
+                >
+                  <Trash2 className={`w-4 h-4 mr-1 ${clearSeedMutation.isPending ? "animate-spin" : ""}`} />
+                  {clearSeedMutation.isPending ? "Removendo..." : "Limpar Dados Fictícios"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Remove dispositivos e clientes de exemplo que não vieram do GenieACS.
                 </p>
               </div>
             </CardContent>
