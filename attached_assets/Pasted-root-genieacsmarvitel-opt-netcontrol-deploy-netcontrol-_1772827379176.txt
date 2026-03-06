@@ -1,0 +1,31 @@
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# cd /opt/netcontrol/deploy/netcontrol
+git -C ../.. pull origin main
+docker compose restart nginx
+remote: Enumerating objects: 14, done.
+remote: Counting objects: 100% (14/14), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 8 (delta 5), reused 8 (delta 5), pack-reused 0 (from 0)
+Unpacking objects: 100% (8/8), 1.55 KiB | 5.00 KiB/s, done.
+From https://github.com/Marvitel/Genieacs-Link-Monitor
+ * branch            main       -> FETCH_HEAD
+   142a335..e6c4126  main       -> origin/main
+Updating 142a335..e6c4126
+Fast-forward
+ attached_assets/Pasted-root-genieacsmarvitel-opt-netcontrol-deploy-netcontrol-_1772827272198.txt | 32 ++++++++++++++++++++++++++++++++
+ deploy/netcontrol/nginx/netcontrol.conf                                                          |  2 ++
+ 2 files changed, 34 insertions(+)
+ create mode 100644 attached_assets/Pasted-root-genieacsmarvitel-opt-netcontrol-deploy-netcontrol-_1772827272198.txt
+[+] restart 0/1
+ ⠏ Container netcontrol-nginx Restarting                                                                                                                17.9s
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# docker compose logs --tail=10 netcontrol-panel | grep -E "v2|v3"
+netcontrol-panel  | 8:01:54 PM [express] GET /api/v2/device/update/DC:62:79:EC:AA:C0 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:01:54 PM [express] GET /api/v2/device/update/3C:6A:D2:A5:37:A0 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:01:55 PM [express] GET /api/v2/device/update/30:E1:F1:D9:48:68 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:01:55 PM [express] GET /api/v2/device/update/3C:6A:D2:A4:EF:00 401 in 4ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:01:56 PM [express] GET /api/v2/device/update/C4:EB:FF:D3:B7:3D 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:01:57 PM [express] GET /api/v2/device/update/C4:EB:FF:D3:C8:B9 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:01:57 PM [express] GET /api/v2/device/update/A8:6E:84:92:52:10 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:01:58 PM [express] GET /api/v2/device/update/8C:90:2D:01:2E:D0 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:01:58 PM [express] GET /api/v2/device/update/70:CD:91:92:6F:B8 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 8:01:59 PM [express] GET /api/v2/device/update/44:3B:32:23:80:05 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# 
