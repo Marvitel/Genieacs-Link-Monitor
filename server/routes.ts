@@ -1,8 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { insertClientSchema, insertDeviceSchema, insertDeviceLogSchema, insertConfigPresetSchema, type SavedDeviceConfig } from "@shared/schema";
+import { requireAuth, requireAdmin, requireApiKey, generateApiKey, hashApiKey } from "./auth";
 import {
   genieGetDevices,
   genieGetDevice,
@@ -30,6 +32,7 @@ import {
   GenieACSError,
 } from "./genieacs";
 import { setupGenieACS, getGenieACSSetupStatus } from "./genieacs-setup";
+import { registerFlashmanAPI } from "./flashman-api";
 
 function handleGenieError(error: unknown, res: import("express").Response) {
   if (error instanceof GenieACSError) {
@@ -110,6 +113,112 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  app.post("/api/auth/login", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ message: "Usuário e senha são obrigatórios" });
+    const user = await storage.getUserByUsername(username);
+    if (!user || !user.active) return res.status(401).json({ message: "Credenciais inválidas" });
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ message: "Credenciais inválidas" });
+    await storage.updateUser(user.id, { lastLoginAt: new Date() } as any);
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    req.session.role = user.role;
+    res.json({ id: user.id, username: user.username, displayName: user.displayName, role: user.role });
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy(() => {});
+    res.json({ message: "Logout realizado" });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: "Não autenticado" });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !user.active) {
+      req.session.destroy(() => {});
+      return res.status(401).json({ message: "Sessão inválida" });
+    }
+    res.json({ id: user.id, username: user.username, displayName: user.displayName, role: user.role });
+  });
+
+  app.get("/api/users", requireAdmin, async (_req, res) => {
+    const allUsers = await storage.getAllUsers();
+    const safe = allUsers.map(u => ({ id: u.id, username: u.username, displayName: u.displayName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt, createdAt: u.createdAt }));
+    res.json(safe);
+  });
+
+  app.post("/api/users", requireAdmin, async (req, res) => {
+    const schema = z.object({ username: z.string().min(3), password: z.string().min(4), displayName: z.string().optional(), role: z.enum(["admin", "operator", "viewer"]).default("operator") });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const existing = await storage.getUserByUsername(parsed.data.username);
+    if (existing) return res.status(409).json({ message: "Usuário já existe" });
+    const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
+    const user = await storage.createUser({ username: parsed.data.username, password: hashedPassword, displayName: parsed.data.displayName || parsed.data.username, role: parsed.data.role, active: true });
+    res.status(201).json({ id: user.id, username: user.username, displayName: user.displayName, role: user.role });
+  });
+
+  app.patch("/api/users/:id", requireAdmin, async (req, res) => {
+    const schema = z.object({ displayName: z.string().optional(), role: z.enum(["admin", "operator", "viewer"]).optional(), active: z.boolean().optional(), password: z.string().min(4).optional() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const updates: any = {};
+    if (parsed.data.displayName !== undefined) updates.displayName = parsed.data.displayName;
+    if (parsed.data.role !== undefined) updates.role = parsed.data.role;
+    if (parsed.data.active !== undefined) updates.active = parsed.data.active;
+    if (parsed.data.password) updates.password = await bcrypt.hash(parsed.data.password, 10);
+    const updated = await storage.updateUser(req.params.id, updates);
+    if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
+    res.json({ id: updated.id, username: updated.username, displayName: updated.displayName, role: updated.role, active: updated.active });
+  });
+
+  app.delete("/api/users/:id", requireAdmin, async (req, res) => {
+    if (req.session.userId === req.params.id) return res.status(400).json({ message: "Não é possível excluir seu próprio usuário" });
+    await storage.deleteUser(req.params.id);
+    res.status(204).end();
+  });
+
+  app.get("/api/api-keys", requireAdmin, async (_req, res) => {
+    const keys = await storage.getApiKeys();
+    const safe = keys.map(k => ({ id: k.id, name: k.name, keyPrefix: k.keyPrefix, permissions: k.permissions, active: k.active, lastUsedAt: k.lastUsedAt, createdAt: k.createdAt }));
+    res.json(safe);
+  });
+
+  app.post("/api/api-keys", requireAdmin, async (req, res) => {
+    const schema = z.object({ name: z.string().min(1), permissions: z.enum(["read", "read_write", "full"]).default("read") });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const rawKey = generateApiKey();
+    const keyHash = hashApiKey(rawKey);
+    const keyPrefix = rawKey.substring(0, 10) + "...";
+    const apiKey = await storage.createApiKey({ name: parsed.data.name, keyHash, keyPrefix, permissions: parsed.data.permissions, createdBy: req.session.userId });
+    res.status(201).json({ id: apiKey.id, name: apiKey.name, key: rawKey, keyPrefix, permissions: apiKey.permissions });
+  });
+
+  app.delete("/api/api-keys/:id", requireAdmin, async (req, res) => {
+    await storage.deleteApiKey(req.params.id);
+    res.status(204).end();
+  });
+
+  app.get("/api/settings", requireAuth, async (_req, res) => {
+    const settings = await storage.getSettings();
+    const obj: Record<string, string> = {};
+    settings.forEach(s => { obj[s.key] = s.value; });
+    res.json(obj);
+  });
+
+  app.post("/api/settings", requireAdmin, async (req, res) => {
+    const entries = Object.entries(req.body);
+    for (const [key, value] of entries) {
+      if (typeof value === "string") await storage.setSetting(key, value);
+      else if (typeof value === "boolean" || typeof value === "number") await storage.setSetting(key, String(value));
+    }
+    res.json({ message: "Configurações salvas" });
+  });
+
+  registerFlashmanAPI(app);
 
   app.get("/api/clients", async (_req, res) => {
     const clients = await storage.getClients();

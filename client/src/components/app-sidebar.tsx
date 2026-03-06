@@ -9,6 +9,9 @@ import {
   Network,
   Moon,
   Sun,
+  LogOut,
+  UserCog,
+  Shield,
 } from "lucide-react";
 import {
   Sidebar,
@@ -25,6 +28,7 @@ import {
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import type { AuthUser } from "@/App";
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -39,7 +43,12 @@ const configItems = [
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  user: AuthUser;
+  onLogout: () => void;
+}
+
+export function AppSidebar({ user, onLogout }: AppSidebarProps) {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
 
@@ -96,17 +105,45 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {user.role === "admin" && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    data-active={location === "/users"}
+                  >
+                    <Link href="/users" data-testid="link-nav-users">
+                      <UserCog className="w-4 h-4" />
+                      <span>Usuários</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-3">
+      <SidebarFooter className="p-3 space-y-2">
+        <div className="flex items-center gap-2 text-xs">
+          <Shield className="w-3 h-3 text-muted-foreground" />
+          <span className="truncate font-medium" data-testid="text-current-user">{user.displayName || user.username}</span>
+          <Badge variant="outline" className="text-[9px] ml-auto">{user.role}</Badge>
+        </div>
         <div className="flex items-center justify-between gap-1">
-          <Badge variant="secondary" className="text-[10px]">v1.0.0</Badge>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onLogout}
+            className="text-xs gap-1 h-7"
+            data-testid="button-logout"
+          >
+            <LogOut className="w-3 h-3" />
+            Sair
+          </Button>
           <Button
             size="icon"
             variant="ghost"
             onClick={toggleTheme}
+            className="h-7 w-7"
             data-testid="button-theme-toggle"
           >
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
