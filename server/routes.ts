@@ -25,6 +25,8 @@ import {
   extractLiveDeviceInfo,
   isGenieACSConfigured,
   genieCheckConnectivity,
+  genieClearDeviceFaults,
+  genieClearAllFaults,
   GenieACSError,
 } from "./genieacs";
 import { setupGenieACS, getGenieACSSetupStatus } from "./genieacs-setup";
@@ -697,6 +699,25 @@ export async function registerRoutes(
       if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
       await genieSetDeviceParameter(req.params.id, parsed.data.parameterPath, parsed.data.value);
       res.json({ message: "Parâmetro definido" });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.delete("/api/genieacs/devices/:id/faults", async (req, res) => {
+    try {
+      const deleted = await genieClearDeviceFaults(req.params.id);
+      res.json({ message: `${deleted} faults removidos`, deleted });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.delete("/api/genieacs/faults", async (req, res) => {
+    try {
+      const code = req.query.code as string | undefined;
+      const deleted = await genieClearAllFaults(code);
+      res.json({ message: `${deleted} faults removidos`, deleted });
     } catch (error) {
       handleGenieError(error, res);
     }

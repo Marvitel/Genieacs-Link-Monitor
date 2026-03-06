@@ -98,10 +98,14 @@ The system creates these provisions and presets automatically via NBI API:
 
 ### Critical Design: Avoiding too_many_commits
 - All presets use SAME channel "netcontrol" to prevent multi-channel loops
-- Removed VALUE CHANGE preset (caused path discovery → value change → preset trigger → loop)
+- **TR-098/TR-181 detection**: Uses `declare("DeviceID.ProductClass", {value: 1})` — a virtual parameter that NEVER triggers device communication. NEVER use `declare("InternetGatewayDevice.DeviceInfo.Manufacturer", {value: now})` — declaring non-existent paths causes commit loops
+- **Known TR-181 product classes**: Device2 (XX230v), XX530v, EX520, EX141, XC220-G3v. All others are TR-098
+- Periodic provisions are lean — only essential data with `{value: hourly}` for most fields, `{value: now}` only for IP/status
+- Removed VoIP and WiFi from periodic preset (only bootstrap/boot) to reduce commit count
 - Path discovery uses {path: hourly} not {path: now} to limit getParameterNames calls
-- PON provision requests specific leaf values ({value: now}) for known paths instead of wildcard discovery
+- PON provision requests specific leaf values ({value: hourly}) for known paths instead of wildcard discovery
 - Removed standalone "default", "inform", "bootstrap" presets that conflicted with netcontrol presets
+- Docker compose: `GENIEACS_CWMP_COMMIT_ITERATIONS_LIMIT=256` for edge cases with many WAN connections
 
 ### PON Data Discovery
 The extractDeviceInfo uses a dual approach:
@@ -143,9 +147,9 @@ Sends 4 groups of getParameterValues tasks to force full data refresh:
 - Frontend: VoipLineCard component with view/edit toggle per line, enable/disable toggle
 
 ### Presets (3 rules - all channel "netcontrol")
-- **netcontrol-bootstrap** - BOOTSTRAP event: inform + all provisions (full data collection)
-- **netcontrol-periodic** - PERIODIC event: inform + netcontrol-inform + netcontrol-pon + netcontrol-voip
-- **netcontrol-boot** - BOOT event: inform + all provisions (full data collection)
+- **netcontrol-bootstrap** - BOOTSTRAP + BOOT events: default + inform + all netcontrol-* provisions (full data collection)
+- **netcontrol-periodic** - PERIODIC event: netcontrol-inform + netcontrol-wan + netcontrol-pon (lean, ~20 declares max)
+- **netcontrol-value-change** - VALUE CHANGE event: netcontrol-inform + netcontrol-wan only
 
 ## GenieACS Deployment (deploy/genieacs/)
 Runs on dedicated server 191.52.255.46 via Docker Compose:

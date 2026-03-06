@@ -187,18 +187,29 @@ export async function genieRefreshFullDevice(deviceId: string): Promise<{ tasks:
   const tasks: string[] = [];
   const errors: string[] = [];
 
-  const pathGroups = [
-    ["InternetGatewayDevice.DeviceInfo.", "Device.DeviceInfo."],
-    ["InternetGatewayDevice.WANDevice.", "Device.IP.", "Device.PPP."],
-    ["InternetGatewayDevice.LANDevice.", "Device.Hosts.", "Device.Ethernet."],
-    ["InternetGatewayDevice.Services.", "Device.Services."],
+  const refreshPaths = [
+    "InternetGatewayDevice.DeviceInfo.",
+    "InternetGatewayDevice.WANDevice.",
+    "InternetGatewayDevice.LANDevice.",
+    "InternetGatewayDevice.Services.",
+    "Device.DeviceInfo.",
+    "Device.WiFi.",
+    "Device.IP.",
+    "Device.PPP.",
+    "Device.Hosts.",
+    "Device.Ethernet.",
+    "Device.Optical.",
+    "Device.DHCPv4.",
+    "Device.NAT.",
+    "Device.DNS.",
+    "Device.Routing.",
   ];
 
-  for (const group of pathGroups) {
+  for (const objectName of refreshPaths) {
     try {
       const task = {
-        name: "getParameterValues",
-        parameterNames: group,
+        name: "refreshObject",
+        objectName,
       };
       const url = `${GENIEACS_NBI_URL}/devices/${encodeURIComponent(deviceId)}/tasks?connection_request`;
       const res = await genieFetch(url, {
@@ -207,16 +218,47 @@ export async function genieRefreshFullDevice(deviceId: string): Promise<{ tasks:
         body: JSON.stringify(task),
       });
       if (res.ok || res.status === 202) {
-        tasks.push(group.join(", "));
-      } else {
-        errors.push(`${group.join(", ")}: status ${res.status}`);
+        tasks.push(`refreshObject:${objectName}`);
+      } else if (res.status !== 404) {
+        errors.push(`${objectName}: status ${res.status}`);
       }
     } catch (err: unknown) {
-      errors.push(`${group.join(", ")}: ${err instanceof Error ? err.message : "erro"}`);
+      errors.push(`${objectName}: ${err instanceof Error ? err.message : "erro"}`);
     }
   }
 
   return { tasks, errors };
+}
+
+export async function genieClearDeviceFaults(deviceId: string): Promise<number> {
+  const url = `${GENIEACS_NBI_URL}/faults/?query=${encodeURIComponent(JSON.stringify({ device: deviceId }))}`;
+  const res = await genieFetch(url, { method: "GET" });
+  if (!res.ok) return 0;
+  const faults = await res.json() as Array<{ _id: string }>;
+  let deleted = 0;
+  for (const fault of faults) {
+    try {
+      const delRes = await genieFetch(`${GENIEACS_NBI_URL}/faults/${encodeURIComponent(fault._id)}`, { method: "DELETE" });
+      if (delRes.ok) deleted++;
+    } catch {}
+  }
+  return deleted;
+}
+
+export async function genieClearAllFaults(code?: string): Promise<number> {
+  const query = code ? { code } : {};
+  const url = `${GENIEACS_NBI_URL}/faults/?query=${encodeURIComponent(JSON.stringify(query))}`;
+  const res = await genieFetch(url, { method: "GET" });
+  if (!res.ok) return 0;
+  const faults = await res.json() as Array<{ _id: string }>;
+  let deleted = 0;
+  for (const fault of faults) {
+    try {
+      const delRes = await genieFetch(`${GENIEACS_NBI_URL}/faults/${encodeURIComponent(fault._id)}`, { method: "DELETE" });
+      if (delRes.ok) deleted++;
+    } catch {}
+  }
+  return deleted;
 }
 
 export async function genieRunDiagnostic(
@@ -426,30 +468,71 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${dev}.DeviceInfo.SerialNumber`
   ) as string || "";
 
-  const ipAddress = firstOf(device,
+  let ipAddress = firstOf(device,
     `${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress`,
     `${igd}.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress`,
     `${igd}.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.ExternalIPAddress`,
-    `${dev}.IP.Interface.1.IPv4Address.1.IPAddress`
   ) as string || "";
 
-  const pppoeUser = firstOf(device,
+  if (!ipAddress) {
+    for (let pi = 1; pi <= 10; pi++) {
+      const pppBase = `${dev}.PPP.Interface.${pi}`;
+      const pppIp = getVal(device, `${pppBase}.IPCP.LocalIPAddress`) as string | null;
+      if (pppIp && pppIp !== "0.0.0.0" && pppIp !== "") { ipAddress = pppIp; break; }
+    }
+  }
+  if (!ipAddress) {
+    for (let ii = 1; ii <= 15; ii++) {
+      const ipBase = `${dev}.IP.Interface.${ii}`;
+      const ip = getVal(device, `${ipBase}.IPv4Address.1.IPAddress`) as string | null;
+      const lower = getVal(device, `${ipBase}.LowerLayers`) as string | null;
+      const name = getVal(device, `${ipBase}.Name`) as string | null;
+      if (!ip || ip === "0.0.0.0") continue;
+      const isLan = name?.startsWith("br") || lower?.includes("Bridge");
+      if (isLan && (ip.startsWith("192.168.") || ip.startsWith("10.0.") || ip.startsWith("172.16."))) continue;
+      const isPPP = lower?.includes("PPP.Interface");
+      if (isPPP || (!isLan && ip)) { ipAddress = ip; break; }
+    }
+  }
+
+  let pppoeUser = firstOf(device,
     `${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username`,
     `${igd}.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.Username`,
-    `${dev}.PPP.Interface.1.Username`
   ) as string || "";
+  if (!pppoeUser) {
+    for (let pi = 1; pi <= 10; pi++) {
+      const user = getVal(device, `${dev}.PPP.Interface.${pi}.Username`) as string | null;
+      if (user) { pppoeUser = user; break; }
+    }
+  }
 
-  const ssid = firstOf(device,
+  let ssid = firstOf(device,
     `${igd}.LANDevice.1.WLANConfiguration.1.SSID`,
     `${dev}.WiFi.SSID.1.SSID`
   ) as string || "";
+  if (!ssid) {
+    for (let si = 2; si <= 14; si++) {
+      const lower = getVal(device, `${dev}.WiFi.SSID.${si}.LowerLayers`) as string | null;
+      const band = lower ? (getVal(device, lower.replace(/\.$/, ".OperatingFrequencyBand")) as string) : null;
+      const ssidVal = getVal(device, `${dev}.WiFi.SSID.${si}.SSID`) as string | null;
+      if (ssidVal && (band === "2.4GHz" || !band)) { ssid = ssidVal; break; }
+    }
+  }
 
-  const ssid5g = firstOf(device,
+  let ssid5g = firstOf(device,
     `${igd}.LANDevice.1.WLANConfiguration.5.SSID`,
     `${igd}.LANDevice.1.WLANConfiguration.3.SSID`,
     `${igd}.LANDevice.1.WLANConfiguration.2.SSID`,
     `${dev}.WiFi.SSID.2.SSID`
   ) as string || "";
+  if (!ssid5g) {
+    for (let si = 2; si <= 14; si++) {
+      const lower = getVal(device, `${dev}.WiFi.SSID.${si}.LowerLayers`) as string | null;
+      const band = lower ? (getVal(device, lower.replace(/\.$/, ".OperatingFrequencyBand")) as string) : null;
+      const ssidVal = getVal(device, `${dev}.WiFi.SSID.${si}.SSID`) as string | null;
+      if (ssidVal && band === "5GHz") { ssid5g = ssidVal; break; }
+    }
+  }
 
   const wifiChannel = firstOf(device,
     `${igd}.LANDevice.1.WLANConfiguration.1.Channel`,

@@ -29,6 +29,7 @@ services:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs
       - GENIEACS_CWMP_ACCESS_LOG_FILE=/var/log/genieacs/cwmp-access.log
       - GENIEACS_EXT_DIR=/opt/genieacs/ext
+      - GENIEACS_CWMP_COMMIT_ITERATIONS_LIMIT=256
     volumes:
       - genieacs_app:/opt/genieacs
       - genieacs_ext:/opt/genieacs/ext
