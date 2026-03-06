@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: netcontrol-postgres
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=netcontrol
+      - POSTGRES_USER=netcontrol
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-netcontrol_secure_2024}
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - netcontrol
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netcontrol"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  netcontrol-panel:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    container_name: netcontrol-panel
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${NETCONTROL_PORT:-3000}:5000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DATABASE_URL=postgresql://netcontrol:${POSTGRES_PASSWORD:-netcontrol_secure_2024}@postgres:5432/netcontrol
+      - SESSION_SECRET=${SESSION_SECRET}
+      - GENIEACS_NBI_URL=http://host.docker.internal:${GENIEACS_NBI_PORT:-7557}
+      - CWMP_URL=${CWMP_URL:-https://flashman.marvitel.com.br:7547}
+    networks:
+      - netcontrol
+
+volumes:
+  postgres_data:
+
+networks:
+  netcontrol:
+    driver: bridge

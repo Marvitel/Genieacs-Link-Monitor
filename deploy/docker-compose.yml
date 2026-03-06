@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   mongodb:
-    image: mongo:6
+    image: mongo:4.4
     container_name: netcontrol-mongodb
     restart: always
     volumes:
@@ -15,7 +15,7 @@ services:
     networks:
       - netcontrol
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      test: echo 'db.runCommand("ping").ok' | mongo --quiet
       interval: 10s
       timeout: 5s
       retries: 5

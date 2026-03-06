@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+*.md
+.local
+.replit
+replit.nix
+.cache
+attached_assets
+deploy/netcontrol/.env
+deploy/.env
+deploy/genieacs/.env
+deploy/nginx/ssl
+/tmp

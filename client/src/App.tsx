@@ -88,6 +88,8 @@ function App() {
     if (!isLoading) {
       if (data && data.id) {
         setUser(data);
+      } else {
+        setUser(null);
       }
       setLoading(false);
     }

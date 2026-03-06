@@ -20,6 +20,38 @@ NetControl ACS utilizes a modern web stack.
 - **ONT Migration/Replacement**: The system supports migrating configurations from an old ONT to a new one, streamlining device replacements.
 - **Supported Devices**: The system is designed to support a wide array of devices including ONT/ONU, Router, Mesh, Switch, and OLT from manufacturers like Huawei, ZTE, Fiberhome, MikroTik, Ruijie, TP-Link, Intelbras, Parks, and Datacom.
 
+## Deployment
+
+### Production Server (191.52.255.46)
+- GenieACS already running on the server (mongo:4.4, no AVX CPU)
+- SSL cert at `/etc/letsencrypt/live/flashman.marvitel.com.br/`
+- ONUs connect via `https://flashman.marvitel.com.br:7547`
+
+### Deploy NetControl to Production
+NetControl is deployed alongside existing GenieACS using `deploy/netcontrol/`:
+```bash
+# On the production server:
+git clone <repo> /opt/netcontrol
+cd /opt/netcontrol/deploy/netcontrol
+sudo bash instalar.sh    # First install
+sudo bash atualizar.sh   # Updates
+```
+
+### Deploy Directory Structure
+- `deploy/netcontrol/` - **NetControl only** (adds to existing GenieACS server)
+  - `docker-compose.yml` - PostgreSQL + NetControl app + Nginx
+  - `instalar.sh` - Installation script (checks GenieACS, ports, SSL, builds)
+  - `atualizar.sh` - Update script (git pull + rebuild)
+  - `nginx/netcontrol.conf` - Nginx reverse proxy with SSL
+- `deploy/` - Full stack (GenieACS + NetControl together, for new servers)
+- `deploy/genieacs/` - GenieACS only (standalone)
+
+### Environment Variables (Production)
+- `DATABASE_URL` - PostgreSQL connection (auto-configured by docker-compose)
+- `SESSION_SECRET` - Session signing key (auto-generated on install)
+- `GENIEACS_NBI_URL` - Points to `http://host.docker.internal:7557` (existing GenieACS)
+- `CWMP_URL` - ACS URL for devices (`https://flashman.marvitel.com.br:7547`)
+
 ## External Dependencies
 - **GenieACS**: The primary external system for CWMP/TR-069 device management.
 - **PostgreSQL**: Used as the main database for the NetControl application.
