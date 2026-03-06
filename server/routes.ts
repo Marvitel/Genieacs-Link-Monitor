@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
 import { storage } from "./storage";
-import { insertClientSchema, insertDeviceSchema, insertDeviceLogSchema, insertConfigPresetSchema } from "@shared/schema";
+import { insertClientSchema, insertDeviceSchema, insertDeviceLogSchema, insertConfigPresetSchema, type SavedDeviceConfig } from "@shared/schema";
 import {
   genieGetDevices,
   genieGetDevice,
@@ -292,6 +292,20 @@ export async function registerRoutes(
 
     try {
       await genieSetMultipleParameters(device.genieId, parameters);
+
+      const currentConfig = (device.savedConfig || {}) as SavedDeviceConfig;
+      currentConfig.wifi = {
+        ...currentConfig.wifi,
+        ...(parsed.data.ssid && { ssid: parsed.data.ssid }),
+        ...(parsed.data.password && { password: parsed.data.password }),
+        ...(parsed.data.ssid5g && { ssid5g: parsed.data.ssid5g }),
+        ...(parsed.data.password5g && { password5g: parsed.data.password5g }),
+        ...(parsed.data.channel !== undefined && { channel: parsed.data.channel }),
+        ...(parsed.data.channel5g !== undefined && { channel5g: parsed.data.channel5g }),
+      };
+      updates.savedConfig = currentConfig as unknown as string;
+      updates.savedConfigAt = new Date() as unknown as string;
+
       await storage.updateDevice(device.id, updates);
 
       await storage.createDeviceLog({
@@ -332,7 +346,15 @@ export async function registerRoutes(
 
     try {
       await genieSetMultipleParameters(device.genieId, parameters);
-      await storage.updateDevice(device.id, { pppoeUser: username });
+
+      const currentConfig = (device.savedConfig || {}) as SavedDeviceConfig;
+      currentConfig.pppoe = { username, password, wanDeviceIndex, wcdIndex, connIndex };
+
+      await storage.updateDevice(device.id, {
+        pppoeUser: username,
+        savedConfig: currentConfig as unknown as Record<string, unknown>,
+        savedConfigAt: new Date(),
+      } as Record<string, unknown>);
       await storage.createDeviceLog({
         deviceId: device.id,
         eventType: "config-change",
@@ -511,6 +533,329 @@ export async function registerRoutes(
         severity: "info",
       });
       res.json({ message: "Atualização de firmware enviada" });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.post("/api/devices/:id/backup-config", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    try {
+      const liveData = await extractLiveDeviceInfo(device.genieId);
+      const savedConfig: SavedDeviceConfig = {};
+
+      if (liveData.ssid || liveData.ssid5g || liveData.wifiPassword || liveData.wifiPassword5g) {
+        savedConfig.wifi = {};
+        if (liveData.ssid) savedConfig.wifi.ssid = liveData.ssid;
+        if (liveData.wifiPassword) savedConfig.wifi.password = liveData.wifiPassword;
+        if (liveData.ssid5g) savedConfig.wifi.ssid5g = liveData.ssid5g;
+        if (liveData.wifiPassword5g) savedConfig.wifi.password5g = liveData.wifiPassword5g;
+        if (liveData.wifiChannel) savedConfig.wifi.channel = parseInt(liveData.wifiChannel) || undefined;
+        if (liveData.wifiChannel5g) savedConfig.wifi.channel5g = parseInt(liveData.wifiChannel5g) || undefined;
+      }
+
+      const pppoeConn = liveData.wanConnections?.find((w: { type: string; username?: string }) => w.type === "PPPoE" && w.username);
+      if (pppoeConn) {
+        savedConfig.pppoe = {
+          username: pppoeConn.username,
+          wanDeviceIndex: pppoeConn.wanDeviceIndex,
+          wcdIndex: pppoeConn.wcdIndex,
+          connIndex: pppoeConn.connIndex,
+        };
+      } else if (device.pppoeUser) {
+        savedConfig.pppoe = { username: device.pppoeUser };
+      }
+
+      if (liveData.lanIp || liveData.dhcpStart) {
+        savedConfig.lan = {};
+        if (liveData.lanIp) savedConfig.lan.lanIp = liveData.lanIp;
+        if (liveData.lanSubnet) savedConfig.lan.lanSubnet = liveData.lanSubnet;
+        if (liveData.dhcpEnabled !== undefined) savedConfig.lan.dhcpEnabled = liveData.dhcpEnabled;
+        if (liveData.dhcpStart) savedConfig.lan.dhcpStart = liveData.dhcpStart;
+        if (liveData.dhcpEnd) savedConfig.lan.dhcpEnd = liveData.dhcpEnd;
+      }
+
+      if (liveData.voipLines?.length > 0) {
+        savedConfig.voip = liveData.voipLines
+          .filter((l: { enabled?: boolean; directoryNumber?: string; sipAuthUser?: string }) => l.enabled || l.directoryNumber || l.sipAuthUser)
+          .map((l: Record<string, unknown>) => ({
+            profileIndex: l.profileIndex as number,
+            lineIndex: l.lineIndex as number,
+            enabled: l.enabled as boolean,
+            directoryNumber: l.directoryNumber as string,
+            sipAuthUser: l.sipAuthUser as string,
+            sipAuthPassword: l.sipAuthPassword as string,
+            sipUri: l.sipUri as string,
+            sipRegistrar: l.sipRegistrar as string,
+            sipRegistrarPort: l.sipRegistrarPort as number,
+            sipProxyServer: l.sipProxyServer as string,
+            sipProxyPort: l.sipProxyPort as number,
+            sipOutboundProxy: l.sipOutboundProxy as string,
+            sipOutboundProxyPort: l.sipOutboundProxyPort as number,
+            sipDomain: l.sipDomain as string,
+          }));
+      }
+
+      await storage.updateDevice(device.id, {
+        savedConfig: savedConfig as unknown as Record<string, unknown>,
+        savedConfigAt: new Date(),
+      } as Record<string, unknown>);
+
+      await storage.createDeviceLog({
+        deviceId: device.id,
+        eventType: "config-backup",
+        message: `Backup de configuração salvo: ${Object.keys(savedConfig).filter(k => (savedConfig as Record<string, unknown>)[k]).join(", ")}`,
+        severity: "info",
+      });
+
+      res.json({ message: "Configuração salva com sucesso", savedConfig, savedAt: new Date() });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.post("/api/devices/:id/restore-config", async (req, res) => {
+    const device = await storage.getDevice(req.params.id);
+    if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
+    if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
+
+    const config = (req.body.config || device.savedConfig) as SavedDeviceConfig | null;
+    if (!config) return res.status(400).json({ message: "Nenhuma configuração salva encontrada" });
+
+    try {
+      const parameters: Array<[string, string | number | boolean]> = [];
+      const isTR181 = device.model === "Device2" || device.model?.includes("XX530") || device.model?.includes("XX230") || device.model?.includes("EX520") || device.model?.includes("EX141") || device.model?.includes("XC220");
+
+      if (config.wifi) {
+        if (isTR181) {
+          if (config.wifi.ssid) parameters.push(["Device.WiFi.SSID.2.SSID", config.wifi.ssid]);
+          if (config.wifi.password) parameters.push(["Device.WiFi.AccessPoint.2.Security.KeyPassphrase", config.wifi.password]);
+          if (config.wifi.ssid5g) parameters.push(["Device.WiFi.SSID.3.SSID", config.wifi.ssid5g]);
+          if (config.wifi.password5g) parameters.push(["Device.WiFi.AccessPoint.3.Security.KeyPassphrase", config.wifi.password5g]);
+        } else {
+          if (config.wifi.ssid) parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", config.wifi.ssid]);
+          if (config.wifi.password) {
+            parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase", config.wifi.password]);
+            parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", config.wifi.password]);
+          }
+          if (config.wifi.ssid5g) parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID", config.wifi.ssid5g]);
+          if (config.wifi.password5g) {
+            parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase", config.wifi.password5g]);
+            parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.PreSharedKey.1.KeyPassphrase", config.wifi.password5g]);
+          }
+        }
+      }
+
+      if (config.pppoe?.username) {
+        if (isTR181) {
+          const connIdx = config.pppoe.connIndex || 1;
+          parameters.push([`Device.PPP.Interface.${connIdx}.Username`, config.pppoe.username]);
+          if (config.pppoe.password) parameters.push([`Device.PPP.Interface.${connIdx}.Password`, config.pppoe.password]);
+        } else {
+          const wd = config.pppoe.wanDeviceIndex || 1;
+          const wcd = config.pppoe.wcdIndex || 1;
+          const ci = config.pppoe.connIndex || 1;
+          parameters.push([`InternetGatewayDevice.WANDevice.${wd}.WANConnectionDevice.${wcd}.WANPPPConnection.${ci}.Username`, config.pppoe.username]);
+          if (config.pppoe.password) parameters.push([`InternetGatewayDevice.WANDevice.${wd}.WANConnectionDevice.${wcd}.WANPPPConnection.${ci}.Password`, config.pppoe.password]);
+        }
+      }
+
+      if (config.lan && !isTR181) {
+        const igd = "InternetGatewayDevice";
+        if (config.lan.lanIp) parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress`, config.lan.lanIp]);
+        if (config.lan.lanSubnet) {
+          parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceSubnetMask`, config.lan.lanSubnet]);
+          parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.SubnetMask`, config.lan.lanSubnet]);
+        }
+        if (config.lan.dhcpEnabled !== undefined) parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.DHCPServerEnable`, config.lan.dhcpEnabled]);
+        if (config.lan.dhcpStart) parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.MinAddress`, config.lan.dhcpStart]);
+        if (config.lan.dhcpEnd) parameters.push([`${igd}.LANDevice.1.LANHostConfigManagement.MaxAddress`, config.lan.dhcpEnd]);
+      }
+
+      if (config.voip && !isTR181) {
+        for (const line of config.voip) {
+          const lineBase = `InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.${line.profileIndex}.Line.${line.lineIndex}`;
+          const sipBase = `InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.${line.profileIndex}.SIP`;
+          if (line.enabled !== undefined) parameters.push([`${lineBase}.Enable`, line.enabled ? "Enabled" : "Disabled"]);
+          if (line.directoryNumber) parameters.push([`${lineBase}.DirectoryNumber`, line.directoryNumber]);
+          if (line.sipAuthUser) parameters.push([`${lineBase}.SIP.AuthUserName`, line.sipAuthUser]);
+          if (line.sipAuthPassword) parameters.push([`${lineBase}.SIP.AuthPassword`, line.sipAuthPassword]);
+          if (line.sipRegistrar) parameters.push([`${sipBase}.RegistrarServer`, line.sipRegistrar]);
+          if (line.sipRegistrarPort) parameters.push([`${sipBase}.RegistrarServerPort`, line.sipRegistrarPort]);
+          if (line.sipProxyServer) parameters.push([`${sipBase}.ProxyServer`, line.sipProxyServer]);
+          if (line.sipProxyPort) parameters.push([`${sipBase}.ProxyServerPort`, line.sipProxyPort]);
+          if (line.sipDomain) parameters.push([`${sipBase}.UserAgentDomain`, line.sipDomain]);
+        }
+      }
+
+      if (parameters.length === 0) return res.status(400).json({ message: "Nenhum parâmetro para restaurar" });
+
+      await genieSetMultipleParameters(device.genieId, parameters);
+
+      await storage.createDeviceLog({
+        deviceId: device.id,
+        eventType: "config-restore",
+        message: `Configuração restaurada: ${parameters.length} parâmetros enviados`,
+        severity: "info",
+      });
+
+      res.json({ message: `Configuração restaurada com sucesso (${parameters.length} parâmetros)`, parametersSet: parameters.length });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.get("/api/genieacs/device-config/:serialNumber", async (req, res) => {
+    const token = req.query.token || req.headers["x-netcontrol-token"];
+    const expectedToken = process.env.SESSION_SECRET || "netcontrol-ext-token";
+    if (token !== expectedToken) return res.status(403).json({ error: "Unauthorized" });
+
+    const device = await storage.getDeviceBySerial(req.params.serialNumber);
+    if (!device || !device.savedConfig) return res.status(404).json({ config: null });
+    res.json({ config: device.savedConfig, savedAt: device.savedConfigAt });
+  });
+
+  app.post("/api/devices/:id/migrate", async (req, res) => {
+    const schema = z.object({ newDeviceId: z.string().min(1) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    const oldDevice = await storage.getDevice(req.params.id);
+    if (!oldDevice) return res.status(404).json({ message: "Dispositivo antigo não encontrado" });
+
+    const newDevice = await storage.getDevice(parsed.data.newDeviceId);
+    if (!newDevice) return res.status(404).json({ message: "Dispositivo novo não encontrado" });
+    if (!newDevice.genieId) return res.status(400).json({ message: "Dispositivo novo não vinculado ao GenieACS" });
+
+    try {
+      let config = oldDevice.savedConfig as SavedDeviceConfig | null;
+      if (!config && oldDevice.genieId) {
+        const liveData = await extractLiveDeviceInfo(oldDevice.genieId);
+        config = {} as SavedDeviceConfig;
+
+        if (liveData.ssid || liveData.ssid5g) {
+          config.wifi = {
+            ssid: liveData.ssid || undefined,
+            password: liveData.wifiPassword || undefined,
+            ssid5g: liveData.ssid5g || undefined,
+            password5g: liveData.wifiPassword5g || undefined,
+          };
+        }
+        const pppoeConn = liveData.wanConnections?.find((w: { type: string; username?: string }) => w.type === "PPPoE" && w.username);
+        if (pppoeConn) {
+          config.pppoe = {
+            username: pppoeConn.username,
+            wanDeviceIndex: pppoeConn.wanDeviceIndex,
+            wcdIndex: pppoeConn.wcdIndex,
+            connIndex: pppoeConn.connIndex,
+          };
+        } else if (oldDevice.pppoeUser) {
+          config.pppoe = { username: oldDevice.pppoeUser };
+        }
+        if (liveData.lanIp) {
+          config.lan = { lanIp: liveData.lanIp, lanSubnet: liveData.lanSubnet, dhcpEnabled: liveData.dhcpEnabled, dhcpStart: liveData.dhcpStart, dhcpEnd: liveData.dhcpEnd };
+        }
+        if (liveData.voipLines?.length > 0) {
+          config.voip = liveData.voipLines.filter((l: { enabled?: boolean; directoryNumber?: string }) => l.enabled || l.directoryNumber).map((l: Record<string, unknown>) => ({
+            profileIndex: l.profileIndex as number, lineIndex: l.lineIndex as number, enabled: l.enabled as boolean,
+            directoryNumber: l.directoryNumber as string, sipAuthUser: l.sipAuthUser as string, sipAuthPassword: l.sipAuthPassword as string,
+            sipUri: l.sipUri as string, sipRegistrar: l.sipRegistrar as string, sipRegistrarPort: l.sipRegistrarPort as number,
+            sipProxyServer: l.sipProxyServer as string, sipProxyPort: l.sipProxyPort as number, sipDomain: l.sipDomain as string,
+          }));
+        }
+      }
+
+      await storage.updateDevice(newDevice.id, {
+        clientId: oldDevice.clientId,
+        pppoeUser: oldDevice.pppoeUser,
+        ssid: oldDevice.ssid,
+        ssid5g: oldDevice.ssid5g,
+        wifiPassword: oldDevice.wifiPassword,
+        wifiPassword5g: oldDevice.wifiPassword5g,
+        savedConfig: config as unknown as Record<string, unknown>,
+        savedConfigAt: new Date(),
+        notes: `Migrado de ${oldDevice.model} (SN: ${oldDevice.serialNumber})${newDevice.notes ? ` | ${newDevice.notes}` : ""}`,
+      } as Record<string, unknown>);
+
+      await storage.updateDevice(oldDevice.id, {
+        status: "offline",
+        clientId: null,
+        replacedByDeviceId: newDevice.id,
+        replacedAt: new Date(),
+        notes: `Substituído por ${newDevice.model} (SN: ${newDevice.serialNumber})${oldDevice.notes ? ` | ${oldDevice.notes}` : ""}`,
+      } as Record<string, unknown>);
+
+      let parametersSet = 0;
+      if (config && Object.keys(config).length > 0 && newDevice.genieId) {
+        try {
+          const parameters: Array<[string, string | number | boolean]> = [];
+          const isTR181 = newDevice.model === "Device2" || newDevice.model?.includes("XX530") || newDevice.model?.includes("XX230") || newDevice.model?.includes("EX520") || newDevice.model?.includes("EX141") || newDevice.model?.includes("XC220");
+
+          if (config.wifi) {
+            if (isTR181) {
+              if (config.wifi.ssid) parameters.push(["Device.WiFi.SSID.2.SSID", config.wifi.ssid]);
+              if (config.wifi.password) parameters.push(["Device.WiFi.AccessPoint.2.Security.KeyPassphrase", config.wifi.password]);
+              if (config.wifi.ssid5g) parameters.push(["Device.WiFi.SSID.3.SSID", config.wifi.ssid5g]);
+              if (config.wifi.password5g) parameters.push(["Device.WiFi.AccessPoint.3.Security.KeyPassphrase", config.wifi.password5g]);
+            } else {
+              if (config.wifi.ssid) parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", config.wifi.ssid]);
+              if (config.wifi.password) {
+                parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase", config.wifi.password]);
+                parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", config.wifi.password]);
+              }
+              if (config.wifi.ssid5g) parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID", config.wifi.ssid5g]);
+              if (config.wifi.password5g) {
+                parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase", config.wifi.password5g]);
+                parameters.push(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.PreSharedKey.1.KeyPassphrase", config.wifi.password5g]);
+              }
+            }
+          }
+          if (config.pppoe?.username) {
+            if (isTR181) {
+              const connIdx = config.pppoe.connIndex || 1;
+              parameters.push([`Device.PPP.Interface.${connIdx}.Username`, config.pppoe.username]);
+              if (config.pppoe.password) parameters.push([`Device.PPP.Interface.${connIdx}.Password`, config.pppoe.password]);
+            } else {
+              const wd = config.pppoe.wanDeviceIndex || 1;
+              const wcd = config.pppoe.wcdIndex || 1;
+              const ci = config.pppoe.connIndex || 1;
+              parameters.push([`InternetGatewayDevice.WANDevice.${wd}.WANConnectionDevice.${wcd}.WANPPPConnection.${ci}.Username`, config.pppoe.username]);
+              if (config.pppoe.password) parameters.push([`InternetGatewayDevice.WANDevice.${wd}.WANConnectionDevice.${wcd}.WANPPPConnection.${ci}.Password`, config.pppoe.password]);
+            }
+          }
+
+          if (parameters.length > 0) {
+            await genieSetMultipleParameters(newDevice.genieId, parameters);
+            parametersSet = parameters.length;
+          }
+        } catch (migrateError) {
+          console.error("Migration restore error:", migrateError);
+        }
+      }
+
+      await storage.createDeviceLog({
+        deviceId: oldDevice.id,
+        eventType: "device-replaced",
+        message: `Dispositivo substituído por ${newDevice.model} (SN: ${newDevice.serialNumber})`,
+        severity: "warning",
+      });
+      await storage.createDeviceLog({
+        deviceId: newDevice.id,
+        eventType: "device-migration",
+        message: `Configuração migrada de ${oldDevice.model} (SN: ${oldDevice.serialNumber}). ${parametersSet} parâmetros aplicados.`,
+        severity: "info",
+      });
+
+      res.json({
+        message: "Migração realizada com sucesso",
+        parametersSet,
+        config: config || null,
+        oldDevice: { id: oldDevice.id, serialNumber: oldDevice.serialNumber, model: oldDevice.model },
+        newDevice: { id: newDevice.id, serialNumber: newDevice.serialNumber, model: newDevice.model },
+      });
     } catch (error) {
       handleGenieError(error, res);
     }

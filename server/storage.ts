@@ -22,6 +22,8 @@ export interface IStorage {
 
   getDevices(): Promise<Device[]>;
   getDevice(id: string): Promise<Device | undefined>;
+  getDeviceBySerial(serialNumber: string): Promise<Device | undefined>;
+  getDeviceByGenieId(genieId: string): Promise<Device | undefined>;
   createDevice(device: InsertDevice): Promise<Device>;
   updateDevice(id: string, device: Partial<InsertDevice>): Promise<Device | undefined>;
   deleteDevice(id: string): Promise<void>;
@@ -81,6 +83,16 @@ export class DatabaseStorage implements IStorage {
 
   async getDevice(id: string): Promise<Device | undefined> {
     const [device] = await db.select().from(devices).where(eq(devices.id, id));
+    return device;
+  }
+
+  async getDeviceBySerial(serialNumber: string): Promise<Device | undefined> {
+    const [device] = await db.select().from(devices).where(eq(devices.serialNumber, serialNumber));
+    return device;
+  }
+
+  async getDeviceByGenieId(genieId: string): Promise<Device | undefined> {
+    const [device] = await db.select().from(devices).where(eq(devices.genieId, genieId));
     return device;
   }
 

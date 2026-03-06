@@ -234,6 +234,96 @@ if (!isTR181) {
   declare("Device.ManagementServer.PeriodicInformInterval", {value: now}, {value: parseInt(INFORM_INTERVAL)});
 }
 `,
+
+  "netcontrol-restore": `
+${IS_TR181_CHECK}
+const sn = declare("DeviceID.SerialNumber", {value: 1}).value[0];
+if (!sn) { log("netcontrol-restore: no serial number"); return; }
+
+let configJson;
+try {
+  configJson = ext("netcontrol", "getConfig", sn);
+} catch(e) {
+  return;
+}
+if (!configJson) return;
+
+let config;
+try {
+  config = JSON.parse(configJson);
+} catch(e) {
+  return;
+}
+
+if (config.wifi) {
+  if (!isTR181) {
+    if (config.wifi.ssid) {
+      declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", {value: 1}, {value: config.wifi.ssid});
+    }
+    if (config.wifi.password) {
+      declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase", {value: 1}, {value: config.wifi.password});
+    }
+    if (config.wifi.ssid5g) {
+      declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID", {value: 1}, {value: config.wifi.ssid5g});
+    }
+    if (config.wifi.password5g) {
+      declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase", {value: 1}, {value: config.wifi.password5g});
+    }
+  } else {
+    if (config.wifi.ssid) {
+      declare("Device.WiFi.SSID.2.SSID", {value: 1}, {value: config.wifi.ssid});
+    }
+    if (config.wifi.password) {
+      declare("Device.WiFi.AccessPoint.2.Security.KeyPassphrase", {value: 1}, {value: config.wifi.password});
+    }
+    if (config.wifi.ssid5g) {
+      declare("Device.WiFi.SSID.3.SSID", {value: 1}, {value: config.wifi.ssid5g});
+    }
+    if (config.wifi.password5g) {
+      declare("Device.WiFi.AccessPoint.3.Security.KeyPassphrase", {value: 1}, {value: config.wifi.password5g});
+    }
+  }
+}
+
+if (config.pppoe && config.pppoe.username) {
+  if (!isTR181) {
+    var wd = config.pppoe.wanDeviceIndex || 1;
+    var wcd = config.pppoe.wcdIndex || 1;
+    var ci = config.pppoe.connIndex || 1;
+    declare("InternetGatewayDevice.WANDevice." + wd + ".WANConnectionDevice." + wcd + ".WANPPPConnection." + ci + ".Username", {value: 1}, {value: config.pppoe.username});
+    if (config.pppoe.password) {
+      declare("InternetGatewayDevice.WANDevice." + wd + ".WANConnectionDevice." + wcd + ".WANPPPConnection." + ci + ".Password", {value: 1}, {value: config.pppoe.password});
+    }
+  } else {
+    var pci = config.pppoe.connIndex || 1;
+    declare("Device.PPP.Interface." + pci + ".Username", {value: 1}, {value: config.pppoe.username});
+    if (config.pppoe.password) {
+      declare("Device.PPP.Interface." + pci + ".Password", {value: 1}, {value: config.pppoe.password});
+    }
+  }
+}
+
+if (config.lan && !isTR181) {
+  var igd = "InternetGatewayDevice";
+  if (config.lan.lanIp) {
+    declare(igd + ".LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress", {value: 1}, {value: config.lan.lanIp});
+  }
+  if (config.lan.lanSubnet) {
+    declare(igd + ".LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceSubnetMask", {value: 1}, {value: config.lan.lanSubnet});
+  }
+  if (config.lan.dhcpEnabled !== undefined) {
+    declare(igd + ".LANDevice.1.LANHostConfigManagement.DHCPServerEnable", {value: 1}, {value: config.lan.dhcpEnabled});
+  }
+  if (config.lan.dhcpStart) {
+    declare(igd + ".LANDevice.1.LANHostConfigManagement.MinAddress", {value: 1}, {value: config.lan.dhcpStart});
+  }
+  if (config.lan.dhcpEnd) {
+    declare(igd + ".LANDevice.1.LANHostConfigManagement.MaxAddress", {value: 1}, {value: config.lan.dhcpEnd});
+  }
+}
+
+log("netcontrol-restore: config applied for " + sn);
+`,
 };
 
 interface GeniePreset {
@@ -263,6 +353,7 @@ const PRESETS: Record<string, GeniePreset> = {
       { type: "provision", name: "netcontrol-lan" },
       { type: "provision", name: "netcontrol-voip" },
       { type: "provision", name: "netcontrol-diagnostics" },
+      { type: "provision", name: "netcontrol-restore" },
     ],
   },
   "netcontrol-periodic": {

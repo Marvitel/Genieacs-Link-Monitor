@@ -61,8 +61,29 @@ import {
   AlertCircle,
   ArrowUpDown,
   Radio,
+  Download,
+  Upload,
+  ArrowLeftRight,
+  Shield,
+  Search,
 } from "lucide-react";
-import type { Device, Client, DeviceLog } from "@shared/schema";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { Device, Client, DeviceLog, SavedDeviceConfig } from "@shared/schema";
 
 interface ConnectedHost {
   hostName: string;
@@ -569,6 +590,77 @@ export default function DeviceDetail() {
     },
   });
 
+  const backupConfigMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/devices/${params?.id}/backup-config`);
+      return res.json();
+    },
+    onSuccess: (data: { savedConfig: SavedDeviceConfig }) => {
+      const parts = [];
+      if (data.savedConfig?.wifi) parts.push("WiFi");
+      if (data.savedConfig?.pppoe) parts.push("PPPoE");
+      if (data.savedConfig?.lan) parts.push("LAN");
+      if (data.savedConfig?.voip?.length) parts.push("VoIP");
+      toast({ title: "Backup realizado", description: parts.length > 0 ? `Configurações salvas: ${parts.join(", ")}` : "Nenhuma configuração encontrada" });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices", params?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/device-logs"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro no backup", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const restoreConfigMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/devices/${params?.id}/restore-config`);
+      return res.json();
+    },
+    onSuccess: (data: { parametersSet: number }) => {
+      toast({ title: "Configuração restaurada", description: `${data.parametersSet} parâmetros aplicados ao dispositivo` });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices", params?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/device-logs"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao restaurar", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const [migrateDialogOpen, setMigrateDialogOpen] = useState(false);
+  const [migrateTargetId, setMigrateTargetId] = useState("");
+  const [migrateSearch, setMigrateSearch] = useState("");
+
+  const { data: allDevices } = useQuery<Device[]>({
+    queryKey: ["/api/devices"],
+    enabled: migrateDialogOpen,
+  });
+
+  const migrateableDevices = (allDevices || []).filter(d =>
+    d.id !== params?.id && d.genieId && !d.replacedByDeviceId &&
+    (migrateSearch === "" ||
+      d.serialNumber.toLowerCase().includes(migrateSearch.toLowerCase()) ||
+      d.model.toLowerCase().includes(migrateSearch.toLowerCase()) ||
+      d.manufacturer.toLowerCase().includes(migrateSearch.toLowerCase()))
+  );
+
+  const migrateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/devices/${params?.id}/migrate`, { newDeviceId: migrateTargetId });
+      return res.json();
+    },
+    onSuccess: (data: { parametersSet: number; newDevice: { serialNumber: string; model: string } }) => {
+      toast({
+        title: "Migração realizada",
+        description: `Configuração transferida para ${data.newDevice.model} (SN: ${data.newDevice.serialNumber}). ${data.parametersSet} parâmetros aplicados.`,
+      });
+      setMigrateDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/device-logs"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro na migração", description: error.message, variant: "destructive" });
+    },
+  });
+
   if (isLoading) {
     return (
       <ScrollArea className="h-full">
@@ -614,7 +706,7 @@ export default function DeviceDetail() {
     ? rxPower > -25 ? "text-emerald-500" : rxPower > -28 ? "text-amber-500" : "text-red-500"
     : "";
 
-  const isAnyPending = rebootMutation.isPending || refreshMutation.isPending || factoryResetMutation.isPending;
+  const isAnyPending = rebootMutation.isPending || refreshMutation.isPending || factoryResetMutation.isPending || backupConfigMutation.isPending || restoreConfigMutation.isPending || migrateMutation.isPending;
 
   return (
     <ScrollArea className="h-full">
@@ -657,6 +749,48 @@ export default function DeviceDetail() {
             >
               {rebootMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Power className="w-3.5 h-3.5 mr-1" />}
               Reboot
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => backupConfigMutation.mutate()}
+              disabled={isAnyPending || backupConfigMutation.isPending}
+              data-testid="button-backup-config"
+            >
+              {backupConfigMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+              Backup
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isAnyPending || !device.savedConfig} data-testid="button-restore-config">
+                  <Upload className="w-3.5 h-3.5 mr-1" />
+                  Restaurar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Restaurar Configuração</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Aplicar a configuração salva em {device.savedConfigAt ? new Date(device.savedConfigAt).toLocaleString("pt-BR") : "N/A"} ao dispositivo {device.serialNumber}?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-cancel-restore">Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => restoreConfigMutation.mutate()} data-testid="button-confirm-restore">
+                    Restaurar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setMigrateDialogOpen(true); setMigrateTargetId(""); setMigrateSearch(""); }}
+              disabled={isAnyPending}
+              data-testid="button-migrate"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 mr-1" />
+              Migrar ONT
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -1414,6 +1548,110 @@ export default function DeviceDetail() {
             )}
           </div>
         </div>
+
+        {device.savedConfig && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                Backup de Configuração
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Último backup</span>
+                <span className="font-medium">{device.savedConfigAt ? new Date(device.savedConfigAt).toLocaleString("pt-BR") : "N/A"}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                {(device.savedConfig as SavedDeviceConfig)?.wifi && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-wifi">WiFi</Badge>}
+                {(device.savedConfig as SavedDeviceConfig)?.pppoe && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-pppoe">PPPoE</Badge>}
+                {(device.savedConfig as SavedDeviceConfig)?.lan && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-lan">LAN</Badge>}
+                {((device.savedConfig as SavedDeviceConfig)?.voip?.length ?? 0) > 0 && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-voip">VoIP</Badge>}
+              </div>
+              {device.replacedByDeviceId && (
+                <div className="flex items-center gap-1 mt-2 text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>Dispositivo substituído</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <Dialog open={migrateDialogOpen} onOpenChange={setMigrateDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Migrar Configuração para Nova ONT</DialogTitle>
+              <DialogDescription>
+                Transferir todas as configurações de {device.manufacturer} {device.model} (SN: {device.serialNumber}) para um novo dispositivo.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Buscar dispositivo destino</Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por serial, modelo ou fabricante..."
+                    value={migrateSearch}
+                    onChange={(e) => setMigrateSearch(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-migrate-search"
+                  />
+                </div>
+              </div>
+              <ScrollArea className="h-48 border rounded-md">
+                {migrateableDevices.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground p-4">
+                    Nenhum dispositivo encontrado
+                  </div>
+                ) : (
+                  <div className="p-2 space-y-1">
+                    {migrateableDevices.slice(0, 20).map(d => (
+                      <button
+                        key={d.id}
+                        onClick={() => setMigrateTargetId(String(d.id))}
+                        className={`w-full text-left p-2 rounded-md text-sm transition-colors ${
+                          String(d.id) === migrateTargetId
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-muted"
+                        }`}
+                        data-testid={`button-select-device-${d.id}`}
+                      >
+                        <div className="font-medium">{d.manufacturer} {d.model}</div>
+                        <div className="text-xs opacity-75">SN: {d.serialNumber} {d.status === "online" ? "🟢" : "⚪"}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+              {device.savedConfig && (
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium">Configurações a transferir:</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {(device.savedConfig as SavedDeviceConfig)?.wifi && <Badge variant="outline" className="text-[10px]">WiFi</Badge>}
+                    {(device.savedConfig as SavedDeviceConfig)?.pppoe && <Badge variant="outline" className="text-[10px]">PPPoE</Badge>}
+                    {(device.savedConfig as SavedDeviceConfig)?.lan && <Badge variant="outline" className="text-[10px]">LAN</Badge>}
+                    {((device.savedConfig as SavedDeviceConfig)?.voip?.length ?? 0) > 0 && <Badge variant="outline" className="text-[10px]">VoIP</Badge>}
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setMigrateDialogOpen(false)} data-testid="button-cancel-migrate">
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => migrateMutation.mutate()}
+                disabled={!migrateTargetId || migrateMutation.isPending}
+                data-testid="button-confirm-migrate"
+              >
+                {migrateMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <ArrowLeftRight className="w-4 h-4 mr-1" />}
+                Confirmar Migração
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </ScrollArea>
   );

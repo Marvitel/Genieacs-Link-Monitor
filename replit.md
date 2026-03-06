@@ -146,8 +146,29 @@ Sends 4 groups of getParameterValues tasks to force full data refresh:
 - Edit endpoint: POST `/api/devices/:id/voip-config` with profileIndex, lineIndex, and SIP fields
 - Frontend: VoipLineCard component with view/edit toggle per line, enable/disable toggle
 
+### Auto-Restore After Factory Reset
+- `netcontrol-restore` provision runs on BOOTSTRAP event (part of netcontrol-bootstrap preset)
+- Calls ext script `netcontrol.getConfig` which fetches saved config from NetControl API
+- API endpoint: `GET /api/genieacs/device-config/:serialNumber`
+- Applies WiFi (SSID/password 2.4G+5G), PPPoE (username/password), LAN (IP/subnet/DHCP) configs
+- Handles TR-098 and TR-181 paths correctly using ProductClass detection
+- Ext script: `deploy/genieacs/ext/netcontrol.js` (must be deployed to GenieACS server at `/opt/genieacs/ext/netcontrol.js`)
+
+### Config Backup & Restore
+- `POST /api/devices/:id/backup-config` - Captures current live config (WiFi, PPPoE, LAN, VoIP) from GenieACS
+- `POST /api/devices/:id/restore-config` - Pushes saved config to device via TR-069 setParameterValues tasks
+- Auto-save: WiFi and PPPoE config changes automatically update `savedConfig` field
+- Device schema: `savedConfig` (JSONB), `savedConfigAt` (timestamp)
+
+### ONT Migration/Replacement
+- `POST /api/devices/:id/migrate` with `{newDeviceId}` - Transfers config from old to new device
+- Copies: clientId, pppoeUser, ssid, wifiPassword, ssid5g, wifiPassword5g, savedConfig
+- Pushes config to new device via restore-config endpoint
+- Marks old device: `replacedByDeviceId`, `replacedAt` fields set
+- UI: "Migrar ONT" dialog with device search and selection
+
 ### Presets (3 rules - all channel "netcontrol")
-- **netcontrol-bootstrap** - BOOTSTRAP + BOOT events: default + inform + all netcontrol-* provisions (full data collection)
+- **netcontrol-bootstrap** - BOOTSTRAP + BOOT events: default + inform + all netcontrol-* provisions + netcontrol-restore (full data collection + auto-restore)
 - **netcontrol-periodic** - PERIODIC event: netcontrol-inform + netcontrol-wan + netcontrol-pon (lean, ~20 declares max)
 - **netcontrol-value-change** - VALUE CHANGE event: netcontrol-inform + netcontrol-wan only
 

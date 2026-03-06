@@ -72,6 +72,10 @@ export const devices = pgTable("devices", {
   notes: text("notes"),
   configPresetId: varchar("config_preset_id"),
   tags: text("tags").array(),
+  savedConfig: jsonb("saved_config"),
+  savedConfigAt: timestamp("saved_config_at"),
+  replacedByDeviceId: varchar("replaced_by_device_id"),
+  replacedAt: timestamp("replaced_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -118,6 +122,47 @@ export const insertConfigPresetSchema = createInsertSchema(configPresets).omit({
 
 export type InsertConfigPreset = z.infer<typeof insertConfigPresetSchema>;
 export type ConfigPreset = typeof configPresets.$inferSelect;
+
+export interface SavedDeviceConfig {
+  wifi?: {
+    ssid?: string;
+    password?: string;
+    channel?: number;
+    ssid5g?: string;
+    password5g?: string;
+    channel5g?: number;
+  };
+  pppoe?: {
+    username?: string;
+    password?: string;
+    wanDeviceIndex?: number;
+    wcdIndex?: number;
+    connIndex?: number;
+  };
+  lan?: {
+    lanIp?: string;
+    lanSubnet?: string;
+    dhcpEnabled?: boolean;
+    dhcpStart?: string;
+    dhcpEnd?: string;
+  };
+  voip?: Array<{
+    profileIndex: number;
+    lineIndex: number;
+    enabled?: boolean;
+    directoryNumber?: string;
+    sipAuthUser?: string;
+    sipAuthPassword?: string;
+    sipUri?: string;
+    sipRegistrar?: string;
+    sipRegistrarPort?: number;
+    sipProxyServer?: string;
+    sipProxyPort?: number;
+    sipOutboundProxy?: string;
+    sipOutboundProxyPort?: number;
+    sipDomain?: string;
+  }>;
+}
 
 export const DEVICE_TYPES = ["ont", "router", "mesh", "switch", "olt"] as const;
 export const DEVICE_STATUSES = ["online", "offline", "warning", "maintenance"] as const;
