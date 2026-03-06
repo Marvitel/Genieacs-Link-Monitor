@@ -218,6 +218,41 @@ export async function registerRoutes(
     res.json({ message: "Configurações salvas" });
   });
 
+  app.post("/api/linkmonitor/test", requireAuth, async (req, res) => {
+    const { url, username, password } = req.body;
+    if (!url || !username || !password) return res.status(400).json({ success: false, message: "URL, usuário e senha são obrigatórios" });
+    try {
+      let baseUrl = url.trim();
+      if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
+      const token = Buffer.from(`${username}:${password}`).toString("base64");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(`${baseUrl}/api/v3/config`, {
+          headers: { Authorization: `Basic ${token}`, Accept: "application/json" },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (response.ok) {
+          res.json({ success: true, message: `Conectado com sucesso (${response.status})` });
+        } else if (response.status === 401) {
+          res.json({ success: false, message: "Falha na autenticação: usuário ou senha incorretos" });
+        } else {
+          res.json({ success: false, message: `Erro ${response.status}: ${response.statusText}` });
+        }
+      } catch (fetchErr: any) {
+        clearTimeout(timeout);
+        if (fetchErr.name === "AbortError") {
+          res.json({ success: false, message: "Timeout: servidor não respondeu em 10 segundos" });
+        } else {
+          res.json({ success: false, message: `Erro de conexão: ${fetchErr.message}` });
+        }
+      }
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
   registerFlashmanAPI(app);
 
   app.get("/api/clients", async (_req, res) => {

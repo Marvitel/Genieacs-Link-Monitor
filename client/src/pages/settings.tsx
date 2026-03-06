@@ -73,6 +73,7 @@ export default function Settings() {
   const [acsUrl, setAcsUrl] = useState("");
   const [nbiUrl, setNbiUrl] = useState("");
   const [informInterval, setInformInterval] = useState("300");
+  const [lmUrl, setLmUrl] = useState("");
   const [lmUser, setLmUser] = useState("");
   const [lmPassword, setLmPassword] = useState("");
   const [autoSync, setAutoSync] = useState(false);
@@ -105,6 +106,7 @@ export default function Settings() {
       if (settings.acs_url) setAcsUrl(settings.acs_url);
       if (settings.nbi_url) setNbiUrl(settings.nbi_url);
       if (settings.inform_interval) setInformInterval(settings.inform_interval);
+      if (settings.linkmonitor_url) setLmUrl(settings.linkmonitor_url);
       if (settings.linkmonitor_user) setLmUser(settings.linkmonitor_user);
       if (settings.linkmonitor_password) setLmPassword(settings.linkmonitor_password);
       setAutoSync(settings.auto_sync === "true");
@@ -213,12 +215,28 @@ export default function Settings() {
 
   const saveLinkMonitor = () => {
     saveSettingsMutation.mutate({
+      linkmonitor_url: lmUrl,
       linkmonitor_user: lmUser,
       linkmonitor_password: lmPassword,
       auto_sync: String(autoSync),
       auto_discover: String(autoDiscover),
     });
   };
+
+  const testLinkMonitorMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/linkmonitor/test", { url: lmUrl, username: lmUser, password: lmPassword });
+      return res.json();
+    },
+    onSuccess: (data: { success: boolean; message: string }) => {
+      if (data.success) {
+        toast({ title: "Conexão OK", description: data.message });
+      } else {
+        toast({ title: "Falha na conexão", description: data.message, variant: "destructive" });
+      }
+    },
+    onError: (err: Error) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
+  });
 
   const saveNotifications = () => {
     saveSettingsMutation.mutate({
@@ -541,20 +559,27 @@ export default function Settings() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-1">
                 <Link2 className="w-4 h-4 text-primary" />
-                Integração Link Monitor
+                Link Monitor / Link-Watcher-Pro
               </CardTitle>
               <CardDescription className="text-xs">
-                Vincular dispositivos a clientes via sistema de monitoramento
+                Conexão com o Link-Watcher-Pro via Basic Auth (usuário e senha)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Usuário API</Label>
-                <Input value={lmUser} onChange={(e) => setLmUser(e.target.value)} placeholder="usuario" data-testid="input-linkmonitor-user" />
+                <Label>URL do Link Monitor</Label>
+                <Input value={lmUrl} onChange={(e) => setLmUrl(e.target.value)} placeholder="https://linkmonitor.seudominio.com.br" data-testid="input-linkmonitor-url" />
+                <p className="text-xs text-muted-foreground">Endereço do Link-Watcher-Pro</p>
               </div>
-              <div className="space-y-2">
-                <Label>Senha API</Label>
-                <Input type="password" value={lmPassword} onChange={(e) => setLmPassword(e.target.value)} placeholder="••••••" data-testid="input-linkmonitor-password" />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Usuário API</Label>
+                  <Input value={lmUser} onChange={(e) => setLmUser(e.target.value)} placeholder="usuario" data-testid="input-linkmonitor-user" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Senha API</Label>
+                  <Input type="password" value={lmPassword} onChange={(e) => setLmPassword(e.target.value)} placeholder="••••••" data-testid="input-linkmonitor-password" />
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <div>
@@ -571,10 +596,21 @@ export default function Settings() {
                 <Switch checked={autoDiscover} onCheckedChange={setAutoDiscover} data-testid="switch-auto-discover" />
               </div>
               <Separator />
-              <Button variant="secondary" className="w-full" onClick={saveLinkMonitor} disabled={saveSettingsMutation.isPending} data-testid="button-save-linkmonitor">
-                {saveSettingsMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                Salvar Integração
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="secondary" className="flex-1" onClick={saveLinkMonitor} disabled={saveSettingsMutation.isPending} data-testid="button-save-linkmonitor">
+                  {saveSettingsMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                  Salvar Configurações
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => testLinkMonitorMutation.mutate()}
+                  disabled={testLinkMonitorMutation.isPending || !lmUrl || !lmUser || !lmPassword}
+                  data-testid="button-test-linkmonitor"
+                >
+                  {testLinkMonitorMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                  Testar Conexão
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
