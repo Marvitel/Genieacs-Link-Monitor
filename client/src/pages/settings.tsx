@@ -25,11 +25,10 @@ import {
 } from "lucide-react";
 
 interface SetupStatus {
-  provisionsInstalled: string[];
-  presetsInstalled: string[];
-  totalProvisions: number;
-  totalPresets: number;
-  isFullyConfigured: boolean;
+  provisions: string[];
+  presets: string[];
+  missingProvisions: string[];
+  missingPresets: string[];
 }
 
 interface GenieStatus {
@@ -82,7 +81,7 @@ export default function Settings() {
 
   const setupStatus = genieStatus?.setup;
   const isConnected = genieStatus?.connected;
-  const needsSetup = isConnected && setupStatus && !setupStatus.isFullyConfigured;
+  const needsSetup = isConnected && setupStatus && (setupStatus.missingProvisions.length > 0 || setupStatus.missingPresets.length > 0);
 
   return (
     <ScrollArea className="h-full">
@@ -100,8 +99,8 @@ export default function Settings() {
                 <div className="flex-1">
                   <p className="text-sm font-medium">GenieACS precisa ser configurado</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    O GenieACS está conectado mas faltam {setupStatus.totalProvisions - setupStatus.provisionsInstalled.length} provisions
-                    e {setupStatus.totalPresets - setupStatus.presetsInstalled.length} presets para funcionar corretamente.
+                    O GenieACS está conectado mas faltam {setupStatus.missingProvisions.length} provisions
+                    e {setupStatus.missingPresets.length} presets para funcionar corretamente.
                     Clique no botão abaixo para configurar automaticamente.
                   </p>
                   <Button
@@ -210,15 +209,24 @@ export default function Settings() {
                         <FileCode className="w-4 h-4 text-muted-foreground" />
                         <span className="text-sm">Provisions</span>
                       </div>
-                      <Badge variant={setupStatus?.provisionsInstalled.length === setupStatus?.totalProvisions ? "default" : "outline"}>
-                        {setupStatus?.provisionsInstalled.length ?? 0}/{setupStatus?.totalProvisions ?? 0}
+                      <Badge variant={setupStatus?.missingProvisions.length === 0 ? "default" : "outline"}>
+                        {setupStatus?.provisions.length ?? 0}
                       </Badge>
                     </div>
-                    {setupStatus && setupStatus.provisionsInstalled.length > 0 && (
+                    {setupStatus && setupStatus.provisions.length > 0 && (
                       <div className="flex flex-wrap gap-1">
-                        {setupStatus.provisionsInstalled.map((p) => (
+                        {setupStatus.provisions.map((p) => (
                           <Badge key={p} variant="secondary" className="text-xs font-mono" data-testid={`badge-provision-${p}`}>
                             {p.replace("netcontrol-", "")}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {setupStatus && setupStatus.missingProvisions.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {setupStatus.missingProvisions.map((p) => (
+                          <Badge key={p} variant="destructive" className="text-xs font-mono" data-testid={`badge-missing-provision-${p}`}>
+                            {p.replace("netcontrol-", "")} (faltando)
                           </Badge>
                         ))}
                       </div>
@@ -231,15 +239,24 @@ export default function Settings() {
                         <Settings2 className="w-4 h-4 text-muted-foreground" />
                         <span className="text-sm">Presets</span>
                       </div>
-                      <Badge variant={setupStatus?.presetsInstalled.length === setupStatus?.totalPresets ? "default" : "outline"}>
-                        {setupStatus?.presetsInstalled.length ?? 0}/{setupStatus?.totalPresets ?? 0}
+                      <Badge variant={setupStatus?.missingPresets.length === 0 ? "default" : "outline"}>
+                        {setupStatus?.presets.length ?? 0}
                       </Badge>
                     </div>
-                    {setupStatus && setupStatus.presetsInstalled.length > 0 && (
+                    {setupStatus && setupStatus.presets.length > 0 && (
                       <div className="flex flex-wrap gap-1">
-                        {setupStatus.presetsInstalled.map((p) => (
+                        {setupStatus.presets.map((p) => (
                           <Badge key={p} variant="secondary" className="text-xs font-mono" data-testid={`badge-preset-${p}`}>
                             {p.replace("netcontrol-", "")}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {setupStatus && setupStatus.missingPresets.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {setupStatus.missingPresets.map((p) => (
+                          <Badge key={p} variant="destructive" className="text-xs font-mono" data-testid={`badge-missing-preset-${p}`}>
+                            {p.replace("netcontrol-", "")} (faltando)
                           </Badge>
                         ))}
                       </div>
@@ -262,7 +279,7 @@ export default function Settings() {
                       <Wrench className={`w-4 h-4 mr-1 ${setupMutation.isPending ? "animate-spin" : ""}`} />
                       {setupMutation.isPending
                         ? "Configurando..."
-                        : setupStatus?.isFullyConfigured
+                        : setupStatus?.missingProvisions.length === 0 && setupStatus?.missingPresets.length === 0
                           ? "Reconfigurar GenieACS"
                           : "Configurar GenieACS"}
                     </Button>
