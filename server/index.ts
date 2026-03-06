@@ -28,14 +28,18 @@ app.use(
 app.use(express.urlencoded({ extended: false }));
 
 const PgStore = connectPgSimple(session);
+const sessionStore = new PgStore({
+  conString: process.env.DATABASE_URL,
+  createTableIfMissing: false,
+  errorLog: (err: Error) => {
+    console.error("PgStore error:", err.message);
+  },
+});
 app.use(
   session({
-    store: new PgStore({
-      conString: process.env.DATABASE_URL,
-      createTableIfMissing: true,
-    }),
+    store: sessionStore,
     secret: process.env.SESSION_SECRET || "netcontrol-default-secret",
-    resave: false,
+    resave: true,
     saveUninitialized: false,
     proxy: true,
     cookie: {

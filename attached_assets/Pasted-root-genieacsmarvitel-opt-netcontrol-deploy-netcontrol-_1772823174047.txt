@@ -1,0 +1,32 @@
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# docker compose logs --tail=30 netcontrol-panel
+netcontrol-panel  | 6:52:20 PM [express] GET /api/v3/device/pppoe-username/maui_casa90/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:20 PM [express] GET /api/v3/device/pppoe-username/tjse.pacatuba/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v3/device/serial-pon/ITBSCFE5E2B5/ 200 in 3ms
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v3/device/serial-tr069/ITBSCFE5E2B5/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v2/device/update/ITBSCFE5E2B5 401 in 4ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v3/device/pppoe-username/maui_casa02/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v3/device/pppoe-username/SW-EDD-ETH8/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v3/device/serial-pon/TPLG00225D40/ 200 in 2ms
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v3/device/serial-tr069/TPLG00225D40/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v2/device/update/TPLG00225D40 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v3/device/pppoe-username/tahaa-casa09/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v3/device/pppoe-username/parkville.gpon/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:21 PM [express] GET /api/v3/device/pppoe-username/tjse.itaporanga/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:22 PM [express] GET /api/v3/device/serial-pon/ZTEGD70DBA33/ 200 in 3ms
+netcontrol-panel  | 6:52:22 PM [express] GET /api/v3/device/serial-tr069/ZTEGD70DBA33/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:22 PM [express] GET /api/v2/device/update/ZTEGD70DBA33 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:22 PM [express] GET /api/v3/device/pppoe-username/casa_507/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:22 PM [express] GET /api/v3/device/serial-pon/TPLG84678AD8/ 200 in 2ms
+netcontrol-panel  | 6:52:22 PM [express] GET /api/v3/device/serial-tr069/TPLG84678AD8/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:22 PM [express] GET /api/v2/device/update/TPLG84678AD8 401 in 5ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:22 PM [express] GET /api/v3/device/pppoe-username/carlos.santos/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:22 PM [express] GET /api/v3/device/pppoe-username/sandra.rezende_1/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:23 PM [express] GET /api/v3/device/pppoe-username/OLT%20CIANET%20ATENDIMENTO/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:23 PM [express] GET /api/v3/device/serial-pon/ZTEGD70DB796/ 200 in 2ms
+netcontrol-panel  | 6:52:24 PM [express] GET /api/v3/device/serial-tr069/ZTEGD70DB796/ 401 in 2ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:24 PM [express] GET /api/v2/device/update/ZTEGD70DB796 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:24 PM [express] GET /api/v3/device/pppoe-username/fernando.cintra/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:24 PM [express] GET /api/v3/device/pppoe-username/tjse.areiabranca/ 401 in 3ms :: {"message":"API key ou autenticação necessária"}
+netcontrol-panel  | 6:52:24 PM [express] GET /api/v3/device/serial-pon/TPLG84924208/ 200 in 3ms
+netcontrol-panel  | 6:52:24 PM [express] GET /api/v3/device/serial-tr069/TPLG84924208/ 401 in 4ms :: {"message":"API key ou autenticação necessária"}
+root@genieacsmarvitel:/opt/netcontrol/deploy/netcontrol# 
