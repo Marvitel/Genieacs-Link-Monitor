@@ -95,6 +95,7 @@ const refreshSchema = z.object({
 const diagnosticSchema = z.object({
   type: z.enum(["ping", "traceroute", "download", "upload"]),
   host: z.string().min(1, "host é obrigatório"),
+  connections: z.number().min(1).max(10).optional(),
 });
 
 const wifiConfigSchema = z.object({
@@ -598,7 +599,7 @@ export async function registerRoutes(
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
 
     try {
-      await genieRunDiagnostic(device.genieId, parsed.data.type, parsed.data.host);
+      await genieRunDiagnostic(device.genieId, parsed.data.type, parsed.data.host, parsed.data.connections);
       await storage.createDeviceLog({
         deviceId: device.id,
         eventType: "diagnostic",

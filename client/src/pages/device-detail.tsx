@@ -435,9 +435,11 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
   const [pollCount, setPollCount] = useState(0);
   const diagStartedAt = useRef<number>(0);
 
+  const [speedConnections, setSpeedConnections] = useState(3);
+
   const diagnosticMutation = useMutation({
-    mutationFn: async ({ type, host }: { type: string; host: string }) => {
-      const res = await apiRequest("POST", `/api/devices/${deviceId}/diagnostic`, { type, host });
+    mutationFn: async ({ type, host, connections }: { type: string; host: string; connections?: number }) => {
+      const res = await apiRequest("POST", `/api/devices/${deviceId}/diagnostic`, { type, host, connections });
       return res.json();
     },
     onSuccess: (_, variables) => {
@@ -682,8 +684,8 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
           <div className="space-y-2">
             <Label className="text-xs">URL do Arquivo de Teste (Download)</Label>
             <div className="flex gap-2">
-              <Input value={speedUrl} onChange={(e) => setSpeedUrl(e.target.value)} placeholder="http://speedtest.tele2.net/10MB.zip" className="flex-1 text-xs" data-testid="input-speed-url" />
-              <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "download", host: speedUrl })} disabled={isRunning || diagnosticMutation.isPending || !genieId} data-testid="button-test-download">
+              <Input value={speedUrl} onChange={(e) => setSpeedUrl(e.target.value)} placeholder="https://speedtest.marvitel.com.br:8080/10MB.zip" className="flex-1 text-xs" data-testid="input-speed-url" />
+              <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "download", host: speedUrl, connections: speedConnections })} disabled={isRunning || diagnosticMutation.isPending || !genieId} data-testid="button-test-download">
                 {(activeDiag === "download" && polling) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 <span className="ml-1">{(activeDiag === "download" && polling) ? "Testando..." : "Download"}</span>
               </Button>
@@ -693,10 +695,21 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
             <Label className="text-xs">URL de Upload</Label>
             <div className="flex gap-2">
               <Input value={speedUrl} onChange={(e) => setSpeedUrl(e.target.value)} placeholder="http://speedtest.server/upload" className="flex-1 text-xs" data-testid="input-upload-url" />
-              <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "upload", host: speedUrl })} disabled={isRunning || diagnosticMutation.isPending || !genieId} data-testid="button-test-upload">
+              <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "upload", host: speedUrl, connections: speedConnections })} disabled={isRunning || diagnosticMutation.isPending || !genieId} data-testid="button-test-upload">
                 {(activeDiag === "upload" && polling) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 <span className="ml-1">{(activeDiag === "upload" && polling) ? "Testando..." : "Upload"}</span>
               </Button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Conexões Simultâneas</Label>
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4].map(n => (
+                <Button key={n} size="sm" variant={speedConnections === n ? "default" : "outline"} className="h-7 w-8 text-xs p-0" onClick={() => setSpeedConnections(n)} data-testid={`button-connections-${n}`}>
+                  {n}
+                </Button>
+              ))}
+              <span className="text-[10px] text-muted-foreground ml-1">Mais conexões = resultado mais próximo da velocidade real</span>
             </div>
           </div>
           {(downloadResult || uploadResult) && (

@@ -264,7 +264,8 @@ export async function genieClearAllFaults(code?: string): Promise<number> {
 export async function genieRunDiagnostic(
   deviceId: string,
   diagnosticType: "ping" | "traceroute" | "download" | "upload",
-  host: string
+  host: string,
+  connections?: number
 ): Promise<boolean> {
   let parameterPath: string;
   const parameters: Array<[string, string | number | boolean]> = [];
@@ -294,6 +295,7 @@ export async function genieRunDiagnostic(
       parameterPath = "InternetGatewayDevice.DownloadDiagnostics";
       parameters.push(
         [`${parameterPath}.DownloadURL`, host],
+        [`${parameterPath}.NumberOfConnections`, connections || 1],
         [`${parameterPath}.DiagnosticsState`, "Requested"]
       );
       break;
@@ -301,6 +303,7 @@ export async function genieRunDiagnostic(
       parameterPath = "InternetGatewayDevice.UploadDiagnostics";
       parameters.push(
         [`${parameterPath}.UploadURL`, host],
+        [`${parameterPath}.NumberOfConnections`, connections || 1],
         [`${parameterPath}.DiagnosticsState`, "Requested"]
       );
       break;
