@@ -401,9 +401,27 @@ export async function registerRoutes(
 
       for (const [ssid, group] of ssidMap) {
         if (group.length < 2) continue;
+
+        const meshDevices = group.filter(d => isMeshModel(d.model) || d.deviceType === "mesh");
+        const nonMeshDevices = group.filter(d => !isMeshModel(d.model) && d.deviceType !== "mesh");
+
+        if (nonMeshDevices.length === 1 && meshDevices.length > 0) {
+          for (const mesh of meshDevices) {
+            if (mesh.parentDeviceId === nonMeshDevices[0].id) continue;
+            await storage.updateDevice(mesh.id, { parentDeviceId: nonMeshDevices[0].id } as any);
+            linked++;
+            await storage.createDeviceLog({
+              deviceId: mesh.id,
+              eventType: "auto-link",
+              message: `Auto-vinculado à ONT ${nonMeshDevices[0].manufacturer} ${nonMeshDevices[0].model} (${nonMeshDevices[0].serialNumber}) via SSID "${ssid}"`,
+              severity: "info",
+            });
+          }
+          continue;
+        }
+
         const onts = group.filter(d => isOntDevice(d));
         const meshes = group.filter(d => isMeshCandidate(d) && !isOntDevice(d));
-
         if (onts.length === 1 && meshes.length > 0) {
           for (const mesh of meshes) {
             if (mesh.parentDeviceId === onts[0].id) continue;

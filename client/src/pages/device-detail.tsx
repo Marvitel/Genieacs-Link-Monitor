@@ -1505,6 +1505,7 @@ export default function DeviceDetail() {
                         </ScrollArea>
                       </DialogContent>
                     </Dialog>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {linkedData?.parent && (
