@@ -1515,26 +1515,6 @@ export async function registerRoutes(
     }
   });
 
-  function generateGponSerial(manufacturer: string, macAddress: string | null): string | null {
-    if (!macAddress) return null;
-    const mac = macAddress.replace(/[:\-]/g, "").toUpperCase();
-    if (mac.length < 8) return null;
-    const mfr = manufacturer.toLowerCase();
-    if (mfr.includes("tp-link") || mfr.includes("tplink")) {
-      return "TPLG" + mac.slice(-8);
-    }
-    if (mfr.includes("datacom")) {
-      return "DACM" + mac.slice(-8);
-    }
-    if (mfr.includes("intelbras")) {
-      return "ITBS" + mac.slice(-8);
-    }
-    if (mfr.includes("zte")) {
-      return "ZTEG" + mac.slice(-8);
-    }
-    return null;
-  }
-
   app.post("/api/genieacs/sync", async (_req, res) => {
     try {
       const genieDevices = await genieGetDevices();
@@ -1575,13 +1555,6 @@ export async function registerRoutes(
             lastSeen: info.lastInform ? new Date(info.lastInform) : existing.lastSeen,
             uptime: uptimeStr || existing.uptime,
           };
-
-          if (!existing.gponSerial) {
-            const mac = info.macAddress || existing.macAddress;
-            const mfr = info.manufacturer || existing.manufacturer;
-            const gponSn = generateGponSerial(mfr, mac);
-            if (gponSn) updates.gponSerial = gponSn;
-          }
 
           if (isOnline) {
             const mergedInfo = {
@@ -1642,9 +1615,6 @@ export async function registerRoutes(
             lastSeen: info.lastInform ? new Date(info.lastInform) : null,
             uptime: uptimeStr,
           };
-
-          const gponSn = generateGponSerial(info.manufacturer, info.macAddress);
-          if (gponSn) newDeviceData.gponSerial = gponSn;
 
           if (isOnline) {
             const initialBackup = buildBackupFromBasicInfo({

@@ -87,7 +87,17 @@ export default function Devices() {
       (d.ssid5g && d.ssid5g?.toLowerCase().includes(s)) ||
       (d.notes && d.notes.toLowerCase().includes(s)) ||
       (d.gponSerial && d.gponSerial.toLowerCase().includes(s)) ||
-      (d.gponSerial && s.length >= 4 && d.gponSerial.slice(4).toLowerCase().includes(s.replace(/[:\-]/g, ""))) ||
+      (d.gponSerial && s.length >= 4 && d.gponSerial.slice(8).toLowerCase().includes(s.replace(/[:\-]/g, ""))) ||
+      (d.gponSerial && s.length >= 4 && (() => {
+        const shortPrefixes: Record<string,string> = { "54504C47":"TPLG","4441434D":"DACM","49544253":"ITBS","5A544547":"ZTEG","48575443":"HWTC","46484E54":"FHNT" };
+        const hexPrefix = d.gponSerial!.slice(0,8).toUpperCase();
+        const shortPrefix = shortPrefixes[hexPrefix];
+        if (shortPrefix) {
+          const shortForm = (shortPrefix + d.gponSerial!.slice(8)).toLowerCase();
+          return shortForm.includes(s);
+        }
+        return false;
+      })()) ||
       clientName.includes(s);
     const matchesType = filterType === "all" || d.deviceType === filterType;
     const matchesStatus = filterStatus === "all" || d.status === filterStatus;
