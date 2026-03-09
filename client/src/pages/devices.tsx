@@ -69,19 +69,27 @@ export default function Devices() {
     },
   });
 
+  const clientMap = new Map(clients?.map((c) => [c.id, c]) || []);
+
   const filtered = devices?.filter((d) => {
-    const matchesSearch =
-      d.model.toLowerCase().includes(search.toLowerCase()) ||
-      d.serialNumber.toLowerCase().includes(search.toLowerCase()) ||
-      d.manufacturer.toLowerCase().includes(search.toLowerCase()) ||
-      (d.macAddress && d.macAddress.toLowerCase().includes(search.toLowerCase())) ||
-      (d.pppoeUser && d.pppoeUser.toLowerCase().includes(search.toLowerCase()));
+    const s = search.toLowerCase();
+    const clientName = d.clientId ? clientMap.get(d.clientId)?.name?.toLowerCase() || "" : "";
+    const matchesSearch = !s ||
+      d.model.toLowerCase().includes(s) ||
+      d.serialNumber.toLowerCase().includes(s) ||
+      d.manufacturer.toLowerCase().includes(s) ||
+      (d.macAddress && d.macAddress.toLowerCase().includes(s)) ||
+      (d.macAddress && d.macAddress.replace(/:/g, "").toLowerCase().includes(s.replace(/[:\-]/g, ""))) ||
+      (d.pppoeUser && d.pppoeUser.toLowerCase().includes(s)) ||
+      (d.ipAddress && d.ipAddress.toLowerCase().includes(s)) ||
+      (d.ssid && d.ssid.toLowerCase().includes(s)) ||
+      (d.ssid5g && d.ssid5g?.toLowerCase().includes(s)) ||
+      (d.notes && d.notes.toLowerCase().includes(s)) ||
+      clientName.includes(s);
     const matchesType = filterType === "all" || d.deviceType === filterType;
     const matchesStatus = filterStatus === "all" || d.status === filterStatus;
     return matchesSearch && matchesType && matchesStatus;
   });
-
-  const clientMap = new Map(clients?.map((c) => [c.id, c]) || []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -208,7 +216,7 @@ export default function Devices() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por modelo, serial, MAC, PPPoE..."
+              placeholder="Buscar por modelo, serial, MAC, IP, PPPoE, SSID, cliente..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
