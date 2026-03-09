@@ -514,15 +514,20 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
   const getTraceHops = (data: any): { hop: number; host: string; time: string }[] => {
     if (!data) return [];
     const hops: { hop: number; host: string; time: string }[] = [];
-    const routePrefix = "RouteHops";
+    const extractVal = (v: any) => v && typeof v === "object" && "_value" in v ? String(v._value) : String(v ?? "");
+    const hopIndices = new Set<number>();
     for (const key of Object.keys(data)) {
-      const match = key.match(/RouteHops\.(\d+)\.Host$/);
-      if (match) {
-        const idx = parseInt(match[1]);
-        const host = typeof data[key] === "object" && "_value" in data[key] ? data[key]._value : data[key];
-        const timeKey = Object.keys(data).find(k => k.endsWith(`RouteHops.${idx}.RTTimes`) || k.endsWith(`RouteHops.${idx}.HostAddress`));
-        hops.push({ hop: idx, host: String(host || "*"), time: "" });
-      }
+      const match = key.match(/RouteHops\.(\d+)\./);
+      if (match) hopIndices.add(parseInt(match[1]));
+    }
+    for (const idx of hopIndices) {
+      const hostKey = Object.keys(data).find(k => k.endsWith(`RouteHops.${idx}.HopHost`) || k.endsWith(`RouteHops.${idx}.Host`) || k.endsWith(`RouteHops.${idx}.HopHostAddress`));
+      const timeKey = Object.keys(data).find(k => k.endsWith(`RouteHops.${idx}.HopRTTimes`) || k.endsWith(`RouteHops.${idx}.RTTimes`));
+      const errKey = Object.keys(data).find(k => k.endsWith(`RouteHops.${idx}.HopErrorCode`));
+      const host = hostKey ? extractVal(data[hostKey]) : "*";
+      const time = timeKey ? extractVal(data[timeKey]) : "";
+      const err = errKey ? extractVal(data[errKey]) : "";
+      hops.push({ hop: idx, host: host || "*", time: time || (err === "0" ? "" : err) });
     }
     hops.sort((a, b) => a.hop - b.hop);
     return hops;
@@ -595,39 +600,47 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
           </div>
           {traceResult && (
             <div className="p-3 rounded-md bg-muted/50 space-y-2" data-testid="traceroute-results">
-              <div className="grid grid-cols-2 gap-3 mb-2">
+              <div className="grid grid-cols-3 gap-3 mb-2">
                 <div>
-                  <p className="text-[10px] text-muted-foreground">Host</p>
+                  <p className="text-[10px] text-muted-foreground">Host Destino</p>
                   <p className="text-xs font-mono font-medium">{getVal(traceResult, "Host")}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground">Hops</p>
-                  <p className="text-xs font-mono font-medium">{getVal(traceResult, "ResponseTime") ? `${getVal(traceResult, "ResponseTime")}ms` : getVal(traceResult, "NumberOfRouteHops") || "-"}</p>
+                  <p className="text-[10px] text-muted-foreground">Tempo de Resposta</p>
+                  <p className="text-xs font-mono font-medium">{getVal(traceResult, "ResponseTime") ? `${getVal(traceResult, "ResponseTime")}ms` : "-"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Total de Hops</p>
+                  <p className="text-xs font-mono font-medium">{getVal(traceResult, "RouteHopsNumberOfEntries") || getVal(traceResult, "NumberOfRouteHops") || "-"}</p>
                 </div>
               </div>
               {(() => {
                 const hops = getTraceHops(traceResult);
                 if (hops.length === 0) {
                   const hopText = getVal(traceResult, "RouteHopsNumberOfEntries") || getVal(traceResult, "NumberOfRouteHops");
-                  return hopText ? <p className="text-xs text-muted-foreground">{hopText} hop(s) registrado(s)</p> : null;
+                  return hopText ? <p className="text-xs text-muted-foreground">{hopText} hop(s) registrado(s), dados detalhados indisponíveis</p> : null;
                 }
                 return (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-[10px] h-7 w-12">#</TableHead>
-                        <TableHead className="text-[10px] h-7">Host</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {hops.map(h => (
-                        <TableRow key={h.hop}>
-                          <TableCell className="text-xs py-1 font-mono">{h.hop}</TableCell>
-                          <TableCell className="text-xs py-1 font-mono">{h.host}</TableCell>
+                  <div className="border rounded-md overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/30">
+                          <TableHead className="text-[10px] h-7 w-12 font-semibold">#</TableHead>
+                          <TableHead className="text-[10px] h-7 font-semibold">Host / IP</TableHead>
+                          <TableHead className="text-[10px] h-7 w-24 text-right font-semibold">RTT (ms)</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {hops.map(h => (
+                          <TableRow key={h.hop} className="hover:bg-muted/20">
+                            <TableCell className="text-xs py-1.5 font-mono text-muted-foreground">{h.hop}</TableCell>
+                            <TableCell className="text-xs py-1.5 font-mono">{h.host}</TableCell>
+                            <TableCell className="text-xs py-1.5 font-mono text-right">{h.time || "-"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 );
               })()}
               <Badge variant={getVal(traceResult, "DiagnosticsState") === "Complete" ? "default" : "destructive"} className="text-[10px]">
