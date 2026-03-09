@@ -733,7 +733,7 @@ export function calculateGponSerial(manufacturer: string, wanMacAddress: string)
   if (mfr.includes("tp-link") || mfr.includes("tplink")) {
     const bytes = wanMacAddress.replace(/:/g, "").toUpperCase().match(/.{2}/g);
     if (!bytes || bytes.length !== 6) return null;
-    return "54504C47" + bytes[2] + bytes[3] + bytes[4] + bytes[0];
+    return "TPLG" + bytes[2] + bytes[3] + bytes[4] + bytes[0];
   }
   return null;
 }
