@@ -425,7 +425,7 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
   const { toast } = useToast();
   const [pingHost, setPingHost] = useState("8.8.8.8");
   const [traceHost, setTraceHost] = useState("8.8.8.8");
-  const [speedUrl, setSpeedUrl] = useState("http://speedtest.marvitel.com.br/10MB.zip");
+  const [speedUrl, setSpeedUrl] = useState("https://speedtest.marvitel.com.br:8080/10MB.zip");
   const [activeDiag, setActiveDiag] = useState<string | null>(null);
   const [pingResult, setPingResult] = useState<any>(null);
   const [traceResult, setTraceResult] = useState<any>(null);
