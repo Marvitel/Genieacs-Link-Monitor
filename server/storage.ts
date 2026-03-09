@@ -30,6 +30,7 @@ export interface IStorage {
   getDeviceByGenieId(genieId: string): Promise<Device | undefined>;
   getDeviceByMac(mac: string): Promise<Device | undefined>;
   getDeviceByPppoeUser(pppoeUser: string): Promise<Device | undefined>;
+  getDeviceByGponSerial(gponSerial: string): Promise<Device | undefined>;
   createDevice(device: InsertDevice): Promise<Device>;
   updateDevice(id: string, device: Partial<InsertDevice>): Promise<Device | undefined>;
   deleteDevice(id: string): Promise<void>;
@@ -137,6 +138,11 @@ export class DatabaseStorage implements IStorage {
         ilike(devices.macAddress, mac)
       )
     );
+    return device;
+  }
+
+  async getDeviceByGponSerial(gponSerial: string): Promise<Device | undefined> {
+    const [device] = await db.select().from(devices).where(ilike(devices.gponSerial, gponSerial));
     return device;
   }
 

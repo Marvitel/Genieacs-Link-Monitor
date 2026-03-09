@@ -19,6 +19,8 @@ NetControl ACS utilizes a modern web stack.
 - **Device Configuration Management**: Features include config backup, restore, and auto-restore after factory reset. This is achieved by storing device configurations and applying them via TR-069 setParameterValues tasks.
 - **ONT Migration/Replacement**: The system supports migrating configurations from an old ONT to a new one, streamlining device replacements.
 - **Supported Devices**: The system is designed to support a wide array of devices including ONT/ONU, Router, Mesh, Switch, and OLT from manufacturers like Huawei, ZTE, Fiberhome, MikroTik, Ruijie, TP-Link, Intelbras, Parks, and Datacom.
+- **GPON Serial**: Devices have a `gpon_serial` field auto-calculated from MAC address (e.g., TPLG + last 8 hex of MAC for TP-Link). This allows searching by the GPON serial used in OLT provisioning (e.g., TPLG6262E3E0) even though the ACS uses a different TR-069 serial (e.g., V255025002707). The field is editable manually for cases where auto-calculation doesn't match.
+- **ONT↔Mesh Auto-Linking**: Devices are auto-linked by SSID matching (mesh extensor models like EX520/EX141 linked to parent ONTs like XX530v). Known mesh models (EX520, EX141, EX220, AP820, AX1800, AX1800V, 121AC) are auto-reclassified from `ont` to `mesh` during auto-link.
 
 ## Deployment
 

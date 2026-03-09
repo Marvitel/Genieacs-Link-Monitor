@@ -99,7 +99,9 @@ async function findDeviceByPppoe(pppoeUser: string): Promise<Device | undefined>
 }
 
 async function findDeviceBySerial(serial: string): Promise<Device | undefined> {
-  return storage.getDeviceBySerial(serial);
+  const device = await storage.getDeviceBySerial(serial);
+  if (device) return device;
+  return storage.getDeviceByGponSerial(serial);
 }
 
 async function getLiveDataSafe(device: Device): Promise<any> {
@@ -190,6 +192,7 @@ export function registerFlashmanAPI(app: Express): void {
             manufacturer: device.manufacturer || liveData?.manufacturer || "",
             model: device.model || liveData?.model || "",
             serial: device.serialNumber,
+            gpon_serial: device.gponSerial || "",
             mac_address: device.macAddress || "",
             firmware: device.firmwareVersion || liveData?.firmwareVersion || "",
             hardware: device.hardwareVersion || liveData?.hardwareVersion || "",

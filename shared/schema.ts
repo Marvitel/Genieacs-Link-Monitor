@@ -114,6 +114,7 @@ export const devices = pgTable("devices", {
   tags: text("tags").array(),
   savedConfig: jsonb("saved_config"),
   savedConfigAt: timestamp("saved_config_at"),
+  gponSerial: text("gpon_serial"),
   parentDeviceId: varchar("parent_device_id"),
   replacedByDeviceId: varchar("replaced_by_device_id"),
   replacedAt: timestamp("replaced_at"),

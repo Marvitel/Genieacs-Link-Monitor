@@ -66,6 +66,8 @@ import {
   ArrowLeftRight,
   Shield,
   Search,
+  Pencil,
+  X,
 } from "lucide-react";
 import {
   Dialog,
@@ -495,6 +497,8 @@ export default function DeviceDetail() {
 
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
+  const [editingGponSerial, setEditingGponSerial] = useState(false);
+  const [gponSerialValue, setGponSerialValue] = useState("");
 
   const linkMutation = useMutation({
     mutationFn: async (parentId: string | null) => {
@@ -617,6 +621,20 @@ export default function DeviceDetail() {
     },
     onError: (error: Error) => {
       toast({ title: "Erro ao configurar PPPoE", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateDeviceMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await apiRequest("PATCH", `/api/devices/${params?.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Dispositivo atualizado" });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices", params?.id] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
     },
   });
 
@@ -902,7 +920,24 @@ export default function DeviceDetail() {
                   <CardContent className="divide-y divide-border">
                     <InfoRow label="Fabricante" value={device.manufacturer} icon={Router} />
                     <InfoRow label="Modelo" value={device.model} icon={Settings} />
-                    <InfoRow label="Serial" value={device.serialNumber} />
+                    <InfoRow label="Serial (TR-069)" value={device.serialNumber} />
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">Serial GPON</span>
+                      <div className="flex items-center gap-1">
+                        {editingGponSerial ? (
+                          <form onSubmit={(e) => { e.preventDefault(); updateDeviceMutation.mutate({ gponSerial: gponSerialValue || null }); setEditingGponSerial(false); }} className="flex items-center gap-1">
+                            <Input className="h-7 w-40 text-sm" value={gponSerialValue} onChange={(e) => setGponSerialValue(e.target.value)} autoFocus data-testid="input-gpon-serial" />
+                            <Button type="submit" variant="ghost" size="sm" className="h-7 w-7 p-0" data-testid="button-save-gpon"><Check className="w-3 h-3" /></Button>
+                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditingGponSerial(false)} data-testid="button-cancel-gpon"><X className="w-3 h-3" /></Button>
+                          </form>
+                        ) : (
+                          <>
+                            <span className="text-sm font-medium" data-testid="text-gpon-serial">{device.gponSerial || "—"}</span>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 ml-1" onClick={() => { setGponSerialValue(device.gponSerial || ""); setEditingGponSerial(true); }} data-testid="button-edit-gpon"><Pencil className="w-3 h-3" /></Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                     <InfoRow label="MAC Address" value={liveInfo?.macAddress || device.macAddress} />
                     <InfoRow label="IP Externo" value={liveInfo?.ipAddress || device.ipAddress} icon={Globe} />
                     <InfoRow label="Firmware" value={liveInfo?.firmwareVersion || device.firmwareVersion} />

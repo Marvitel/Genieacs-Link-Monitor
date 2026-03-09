@@ -33,6 +33,7 @@ pool.query(\`
   ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"parent_device_id\" varchar;
   ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"replaced_by_device_id\" varchar;
   ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"replaced_at\" timestamp;
+  ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"gpon_serial\" text;
 \`).then(() => {
   console.log('Session + network_snapshots + parent_device_id + replaced columns ready');
   pool.end();

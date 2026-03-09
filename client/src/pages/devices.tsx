@@ -86,6 +86,8 @@ export default function Devices() {
       (d.ssid && d.ssid.toLowerCase().includes(s)) ||
       (d.ssid5g && d.ssid5g?.toLowerCase().includes(s)) ||
       (d.notes && d.notes.toLowerCase().includes(s)) ||
+      (d.gponSerial && d.gponSerial.toLowerCase().includes(s)) ||
+      (d.gponSerial && s.length >= 4 && d.gponSerial.slice(4).toLowerCase().includes(s.replace(/[:\-]/g, ""))) ||
       clientName.includes(s);
     const matchesType = filterType === "all" || d.deviceType === filterType;
     const matchesStatus = filterStatus === "all" || d.status === filterStatus;
@@ -267,7 +269,7 @@ export default function Devices() {
                           <DeviceTypeBadge type={device.deviceType} />
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                          <span>SN: {device.serialNumber}</span>
+                          <span>SN: {device.serialNumber}{device.gponSerial ? ` (GPON: ${device.gponSerial})` : ""}</span>
                           {device.macAddress && <span>MAC: {device.macAddress}</span>}
                           {device.ipAddress && <span>IP: {device.ipAddress}</span>}
                           {client && <span>Cliente: {client.name}</span>}
