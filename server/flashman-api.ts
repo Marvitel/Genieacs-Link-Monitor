@@ -338,7 +338,7 @@ export function registerFlashmanAPI(app: Express): void {
     }
   });
 
-  app.put("/api/v2/device/command/:mac/:command", requireApiKey, requireWritePermission, async (req: Request, res: Response) => {
+  const commandHandler = async (req: Request, res: Response) => {
     try {
       const device = await findDeviceByMac(req.params.mac) || await findDeviceBySerial(req.params.mac);
       if (!device || !device.genieId) return res.status(404).json({ error: "Device not found or not linked" });
@@ -371,7 +371,10 @@ export function registerFlashmanAPI(app: Express): void {
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
-  });
+  };
+
+  app.put("/api/v2/device/command/:mac/:command", requireApiKey, requireWritePermission, commandHandler);
+  app.post("/api/v2/device/command/:mac/:command", requireApiKey, requireWritePermission, commandHandler);
 
   app.get("/api/v3/device/mac/:mac/wifi", requireApiKey, async (req: Request, res: Response) => {
     try {
@@ -482,5 +485,14 @@ export function registerFlashmanAPI(app: Express): void {
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
+  });
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if ((req.path.startsWith("/api/v2/") || req.path.startsWith("/api/v3/")) && !res.headersSent) {
+      console.log(`[Flashman API] Unhandled route: ${req.method} ${req.originalUrl}`);
+      res.status(404).json({ error: `Endpoint not found: ${req.method} ${req.path}` });
+      return;
+    }
+    next();
   });
 }
