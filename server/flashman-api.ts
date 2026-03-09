@@ -154,6 +154,78 @@ export function registerFlashmanAPI(app: Express): void {
     }
   });
 
+  app.put("/api/v2/device/update/:mac", requireApiKey, requireWritePermission, async (req: Request, res: Response) => {
+    try {
+      const device = await findDeviceByMac(req.params.mac) || await findDeviceBySerial(req.params.mac);
+      if (!device) return res.status(404).json({ success: false, error: "Device not found" });
+
+      const content = req.body?.content || req.body || {};
+      const dbUpdates: Record<string, any> = {};
+      const tr069Params: Array<[string, string | number | boolean]> = [];
+
+      const igd = "InternetGatewayDevice";
+      const wlan1 = `${igd}.LANDevice.1.WLANConfiguration.1`;
+      const wlan5 = `${igd}.LANDevice.1.WLANConfiguration.5`;
+      const pppPrefix = `${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1`;
+
+      if (content.pppoe_user) {
+        dbUpdates.pppoeUser = content.pppoe_user;
+        tr069Params.push([`${pppPrefix}.Username`, content.pppoe_user]);
+      }
+      if (content.pppoe_password) {
+        tr069Params.push([`${pppPrefix}.Password`, content.pppoe_password]);
+      }
+      if (content.wifi_ssid) {
+        dbUpdates.ssid = content.wifi_ssid;
+        tr069Params.push([`${wlan1}.SSID`, content.wifi_ssid]);
+      }
+      if (content.wifi_password) {
+        dbUpdates.wifiPassword = content.wifi_password;
+        tr069Params.push([`${wlan1}.KeyPassphrase`, content.wifi_password]);
+        tr069Params.push([`${wlan1}.PreSharedKey.1.KeyPassphrase`, content.wifi_password]);
+      }
+      if (content.wifi_ssid_5ghz) {
+        dbUpdates.ssid5g = content.wifi_ssid_5ghz;
+        tr069Params.push([`${wlan5}.SSID`, content.wifi_ssid_5ghz]);
+      }
+      if (content.wifi_password_5ghz) {
+        dbUpdates.wifiPassword5g = content.wifi_password_5ghz;
+        tr069Params.push([`${wlan5}.KeyPassphrase`, content.wifi_password_5ghz]);
+        tr069Params.push([`${wlan5}.PreSharedKey.1.KeyPassphrase`, content.wifi_password_5ghz]);
+      }
+      if (content.wifi_channel) {
+        dbUpdates.wifiChannel = content.wifi_channel;
+        tr069Params.push([`${wlan1}.Channel`, Number(content.wifi_channel)]);
+      }
+      if (content.wifi_channel_5ghz) {
+        dbUpdates.wifiChannel5g = content.wifi_channel_5ghz;
+        tr069Params.push([`${wlan5}.Channel`, Number(content.wifi_channel_5ghz)]);
+      }
+      if (content.connection_type) {
+        dbUpdates.connectionType = content.connection_type;
+      }
+
+      if (Object.keys(dbUpdates).length > 0) {
+        await storage.updateDevice(device.id, dbUpdates);
+      }
+
+      if (tr069Params.length > 0 && device.genieId) {
+        try {
+          await genieSetMultipleParameters(device.genieId, tr069Params);
+        } catch (tr069Err: any) {
+          console.log(`[Flashman API] TR-069 set failed for ${device.macAddress}: ${tr069Err.message}`);
+        }
+      }
+
+      const updatedDevice = await findDeviceByMac(req.params.mac) || await findDeviceBySerial(req.params.mac);
+      const liveData = await getLiveDataSafe(updatedDevice || device);
+      res.json(deviceToFlashmanFormat(updatedDevice || device, liveData));
+    } catch (error: any) {
+      console.error(`[Flashman API] PUT update error: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get("/api/v3/device/mac/:mac/", requireApiKey, async (req: Request, res: Response) => {
     try {
       const device = await findDeviceByMac(req.params.mac);
