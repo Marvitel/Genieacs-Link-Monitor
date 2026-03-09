@@ -315,14 +315,16 @@ export async function genieRunDiagnostic(
 
 export async function genieGetDiagnosticResult(
   deviceId: string,
-  diagnosticType: "ping" | "traceroute"
+  diagnosticType: "ping" | "traceroute" | "download" | "upload"
 ): Promise<Record<string, unknown> | null> {
-  let path: string;
-  if (diagnosticType === "ping") {
-    path = "InternetGatewayDevice.IPPingDiagnostics";
-  } else {
-    path = "InternetGatewayDevice.TraceRouteDiagnostics";
-  }
+  const pathMap: Record<string, string> = {
+    ping: "InternetGatewayDevice.IPPingDiagnostics",
+    traceroute: "InternetGatewayDevice.TraceRouteDiagnostics",
+    download: "InternetGatewayDevice.DownloadDiagnostics",
+    upload: "InternetGatewayDevice.UploadDiagnostics",
+  };
+  const path = pathMap[diagnosticType];
+  if (!path) return null;
   const result = await genieGetDeviceParameters(deviceId, path);
   if (!result) return null;
   return result as Record<string, unknown>;

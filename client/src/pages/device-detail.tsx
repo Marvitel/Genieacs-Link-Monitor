@@ -421,11 +421,353 @@ function VoipLineCard({ line, deviceId, genieId, liveLoading }: { line: VoipLine
   );
 }
 
-export default function DeviceDetail() {
-  const [, params] = useRoute("/devices/:id");
+function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: string }) {
   const { toast } = useToast();
   const [pingHost, setPingHost] = useState("8.8.8.8");
   const [traceHost, setTraceHost] = useState("8.8.8.8");
+  const [speedUrl, setSpeedUrl] = useState("http://speedtest.tele2.net/10MB.zip");
+  const [activeDiag, setActiveDiag] = useState<string | null>(null);
+  const [pingResult, setPingResult] = useState<any>(null);
+  const [traceResult, setTraceResult] = useState<any>(null);
+  const [downloadResult, setDownloadResult] = useState<any>(null);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [polling, setPolling] = useState(false);
+  const [pollCount, setPollCount] = useState(0);
+
+  const diagnosticMutation = useMutation({
+    mutationFn: async ({ type, host }: { type: string; host: string }) => {
+      const res = await apiRequest("POST", `/api/devices/${deviceId}/diagnostic`, { type, host });
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      toast({ title: `${variables.type === "ping" ? "Ping" : variables.type === "traceroute" ? "Traceroute" : variables.type === "download" ? "Download" : "Upload"} iniciado` });
+      setActiveDiag(variables.type);
+      setPolling(true);
+      setPollCount(0);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro no diagnóstico", description: error.message, variant: "destructive" });
+    },
+  });
+
+  useEffect(() => {
+    if (!polling || !activeDiag) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/devices/${deviceId}/diagnostic/${activeDiag}`, { credentials: "include" });
+        if (!res.ok) { setPolling(false); return; }
+        const data = await res.json();
+
+        const getVal = (obj: any, suffix: string): string => {
+          if (!obj) return "";
+          for (const key of Object.keys(obj)) {
+            if (key.endsWith(`.${suffix}`)) {
+              const v = obj[key];
+              if (v && typeof v === "object" && "_value" in v) return String(v._value);
+              return String(v ?? "");
+            }
+          }
+          return "";
+        };
+
+        const state = getVal(data, "DiagnosticsState");
+        if (state === "Complete" || state === "Completed") {
+          setPolling(false);
+          if (activeDiag === "ping") setPingResult(data);
+          else if (activeDiag === "traceroute") setTraceResult(data);
+          else if (activeDiag === "download") setDownloadResult(data);
+          else if (activeDiag === "upload") setUploadResult(data);
+          setActiveDiag(null);
+          toast({ title: "Diagnóstico concluído" });
+        } else if (state === "Error" || state === "Error_Internal" || state === "Error_Other") {
+          setPolling(false);
+          setActiveDiag(null);
+          toast({ title: "Diagnóstico falhou", description: state, variant: "destructive" });
+        } else {
+          setPollCount(c => {
+            if (c >= 30) { setPolling(false); setActiveDiag(null); toast({ title: "Timeout", description: "O diagnóstico demorou demais", variant: "destructive" }); }
+            return c + 1;
+          });
+        }
+      } catch { setPollCount(c => c + 1); }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [polling, activeDiag, deviceId]);
+
+  const getVal = (obj: any, suffix: string): string => {
+    if (!obj) return "";
+    for (const key of Object.keys(obj)) {
+      if (key.endsWith(`.${suffix}`)) {
+        const v = obj[key];
+        if (v && typeof v === "object" && "_value" in v) return String(v._value);
+        return String(v ?? "");
+      }
+    }
+    return "";
+  };
+
+  const getTraceHops = (data: any): { hop: number; host: string; time: string }[] => {
+    if (!data) return [];
+    const hops: { hop: number; host: string; time: string }[] = [];
+    const routePrefix = "RouteHops";
+    for (const key of Object.keys(data)) {
+      const match = key.match(/RouteHops\.(\d+)\.Host$/);
+      if (match) {
+        const idx = parseInt(match[1]);
+        const host = typeof data[key] === "object" && "_value" in data[key] ? data[key]._value : data[key];
+        const timeKey = Object.keys(data).find(k => k.endsWith(`RouteHops.${idx}.RTTimes`) || k.endsWith(`RouteHops.${idx}.HostAddress`));
+        hops.push({ hop: idx, host: String(host || "*"), time: "" });
+      }
+    }
+    hops.sort((a, b) => a.hop - b.hop);
+    return hops;
+  };
+
+  const isRunning = polling && activeDiag !== null;
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-1">
+            <Activity className="w-4 h-4 text-primary" /> Ping
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input value={pingHost} onChange={(e) => setPingHost(e.target.value)} placeholder="8.8.8.8" className="flex-1" data-testid="input-ping-host" />
+            <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "ping", host: pingHost })} disabled={isRunning || diagnosticMutation.isPending || !genieId} data-testid="button-test-ping">
+              {(activeDiag === "ping" && polling) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+              <span className="ml-1">{(activeDiag === "ping" && polling) ? "Testando..." : "Ping"}</span>
+            </Button>
+          </div>
+          {pingResult && (
+            <div className="p-3 rounded-md bg-muted/50 space-y-2" data-testid="ping-results">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Host</p>
+                  <p className="text-xs font-mono font-medium">{getVal(pingResult, "Host")}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Sucesso / Total</p>
+                  <p className="text-xs font-mono font-medium">{getVal(pingResult, "SuccessCount")} / {getVal(pingResult, "NumberOfRepetitions")}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Média (ms)</p>
+                  <p className="text-xs font-mono font-medium text-emerald-600">{getVal(pingResult, "AverageResponseTime") || getVal(pingResult, "AverageResponseTimeDetailed")}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Mín / Máx (ms)</p>
+                  <p className="text-xs font-mono font-medium">{getVal(pingResult, "MinimumResponseTime")} / {getVal(pingResult, "MaximumResponseTime")}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <Badge variant={getVal(pingResult, "DiagnosticsState") === "Complete" ? "default" : "destructive"} className="text-[10px]">
+                  {getVal(pingResult, "DiagnosticsState")}
+                </Badge>
+                {parseInt(getVal(pingResult, "FailureCount") || "0") > 0 && (
+                  <Badge variant="destructive" className="text-[10px]">{getVal(pingResult, "FailureCount")} falha(s)</Badge>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-1">
+            <ArrowUpDown className="w-4 h-4 text-primary" /> Traceroute
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input value={traceHost} onChange={(e) => setTraceHost(e.target.value)} placeholder="8.8.8.8" className="flex-1" data-testid="input-trace-host" />
+            <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "traceroute", host: traceHost })} disabled={isRunning || diagnosticMutation.isPending || !genieId} data-testid="button-test-traceroute">
+              {(activeDiag === "traceroute" && polling) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+              <span className="ml-1">{(activeDiag === "traceroute" && polling) ? "Testando..." : "Traceroute"}</span>
+            </Button>
+          </div>
+          {traceResult && (
+            <div className="p-3 rounded-md bg-muted/50 space-y-2" data-testid="traceroute-results">
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Host</p>
+                  <p className="text-xs font-mono font-medium">{getVal(traceResult, "Host")}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Hops</p>
+                  <p className="text-xs font-mono font-medium">{getVal(traceResult, "ResponseTime") ? `${getVal(traceResult, "ResponseTime")}ms` : getVal(traceResult, "NumberOfRouteHops") || "-"}</p>
+                </div>
+              </div>
+              {(() => {
+                const hops = getTraceHops(traceResult);
+                if (hops.length === 0) {
+                  const hopText = getVal(traceResult, "RouteHopsNumberOfEntries") || getVal(traceResult, "NumberOfRouteHops");
+                  return hopText ? <p className="text-xs text-muted-foreground">{hopText} hop(s) registrado(s)</p> : null;
+                }
+                return (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] h-7 w-12">#</TableHead>
+                        <TableHead className="text-[10px] h-7">Host</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {hops.map(h => (
+                        <TableRow key={h.hop}>
+                          <TableCell className="text-xs py-1 font-mono">{h.hop}</TableCell>
+                          <TableCell className="text-xs py-1 font-mono">{h.host}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                );
+              })()}
+              <Badge variant={getVal(traceResult, "DiagnosticsState") === "Complete" ? "default" : "destructive"} className="text-[10px]">
+                {getVal(traceResult, "DiagnosticsState")}
+              </Badge>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-1">
+            <Download className="w-4 h-4 text-primary" /> Speedtest (Download / Upload)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-xs">URL do Arquivo de Teste (Download)</Label>
+            <div className="flex gap-2">
+              <Input value={speedUrl} onChange={(e) => setSpeedUrl(e.target.value)} placeholder="http://speedtest.tele2.net/10MB.zip" className="flex-1 text-xs" data-testid="input-speed-url" />
+              <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "download", host: speedUrl })} disabled={isRunning || diagnosticMutation.isPending || !genieId} data-testid="button-test-download">
+                {(activeDiag === "download" && polling) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                <span className="ml-1">{(activeDiag === "download" && polling) ? "Testando..." : "Download"}</span>
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">URL de Upload</Label>
+            <div className="flex gap-2">
+              <Input value={speedUrl} onChange={(e) => setSpeedUrl(e.target.value)} placeholder="http://speedtest.server/upload" className="flex-1 text-xs" data-testid="input-upload-url" />
+              <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "upload", host: speedUrl })} disabled={isRunning || diagnosticMutation.isPending || !genieId} data-testid="button-test-upload">
+                {(activeDiag === "upload" && polling) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                <span className="ml-1">{(activeDiag === "upload" && polling) ? "Testando..." : "Upload"}</span>
+              </Button>
+            </div>
+          </div>
+          {(downloadResult || uploadResult) && (
+            <div className="p-3 rounded-md bg-muted/50 space-y-3" data-testid="speed-results">
+              {downloadResult && (
+                <div>
+                  <p className="text-[10px] text-muted-foreground font-medium mb-1">Download</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Velocidade</p>
+                      <p className="text-sm font-mono font-bold text-emerald-600">
+                        {(() => {
+                          const bytes = parseInt(getVal(downloadResult, "TestBytesReceived") || "0");
+                          const beginTime = getVal(downloadResult, "BOMTime");
+                          const endTime = getVal(downloadResult, "EOMTime");
+                          if (bytes && beginTime && endTime) {
+                            const start = new Date(beginTime).getTime();
+                            const end = new Date(endTime).getTime();
+                            const seconds = (end - start) / 1000;
+                            if (seconds > 0) return `${((bytes * 8 / seconds) / 1000000).toFixed(2)} Mbps`;
+                          }
+                          return "-";
+                        })()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Bytes Recebidos</p>
+                      <p className="text-xs font-mono">{getVal(downloadResult, "TestBytesReceived")}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Início</p>
+                      <p className="text-xs font-mono">{getVal(downloadResult, "BOMTime")}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Fim</p>
+                      <p className="text-xs font-mono">{getVal(downloadResult, "EOMTime")}</p>
+                    </div>
+                  </div>
+                  <Badge variant={getVal(downloadResult, "DiagnosticsState") === "Complete" ? "default" : "destructive"} className="text-[10px] mt-1">
+                    {getVal(downloadResult, "DiagnosticsState")}
+                  </Badge>
+                </div>
+              )}
+              {uploadResult && (
+                <div>
+                  <p className="text-[10px] text-muted-foreground font-medium mb-1">Upload</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Velocidade</p>
+                      <p className="text-sm font-mono font-bold text-blue-600">
+                        {(() => {
+                          const bytes = parseInt(getVal(uploadResult, "TestBytesSent") || getVal(uploadResult, "TotalBytesSent") || "0");
+                          const beginTime = getVal(uploadResult, "BOMTime");
+                          const endTime = getVal(uploadResult, "EOMTime");
+                          if (bytes && beginTime && endTime) {
+                            const start = new Date(beginTime).getTime();
+                            const end = new Date(endTime).getTime();
+                            const seconds = (end - start) / 1000;
+                            if (seconds > 0) return `${((bytes * 8 / seconds) / 1000000).toFixed(2)} Mbps`;
+                          }
+                          return "-";
+                        })()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Bytes Enviados</p>
+                      <p className="text-xs font-mono">{getVal(uploadResult, "TestBytesSent") || getVal(uploadResult, "TotalBytesSent")}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Início</p>
+                      <p className="text-xs font-mono">{getVal(uploadResult, "BOMTime")}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Fim</p>
+                      <p className="text-xs font-mono">{getVal(uploadResult, "EOMTime")}</p>
+                    </div>
+                  </div>
+                  <Badge variant={getVal(uploadResult, "DiagnosticsState") === "Complete" ? "default" : "destructive"} className="text-[10px] mt-1">
+                    {getVal(uploadResult, "DiagnosticsState")}
+                  </Badge>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="p-2 rounded-md bg-muted/30">
+            <p className="text-[10px] text-muted-foreground">O speedtest usa diagnóstico TR-069 (DownloadDiagnostics/UploadDiagnostics). O dispositivo precisa estar online e conectado ao ACS. A URL deve ser acessível pelo dispositivo.</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {!genieId && (
+        <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span className="text-xs">Dispositivo não vinculado ao GenieACS. Diagnósticos indisponíveis.</span>
+        </div>
+      )}
+
+      {isRunning && (
+        <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400">
+          <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+          <span className="text-xs">Aguardando resposta do dispositivo... ({pollCount}/30)</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function DeviceDetail() {
+  const [, params] = useRoute("/devices/:id");
+  const { toast } = useToast();
   const [wifiSsid, setWifiSsid] = useState("");
   const [wifiPassword, setWifiPassword] = useState("");
   const [wifiSsid5g, setWifiSsid5g] = useState("");
@@ -565,19 +907,6 @@ export default function DeviceDetail() {
     },
   });
 
-  const diagnosticMutation = useMutation({
-    mutationFn: async ({ type, host }: { type: string; host: string }) => {
-      const res = await apiRequest("POST", `/api/devices/${params?.id}/diagnostic`, { type, host });
-      return res.json();
-    },
-    onSuccess: (_, variables) => {
-      toast({ title: `${variables.type.charAt(0).toUpperCase() + variables.type.slice(1)} iniciado`, description: `Teste para ${variables.host}` });
-      queryClient.invalidateQueries({ queryKey: ["/api/device-logs"] });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Erro no diagnóstico", description: error.message, variant: "destructive" });
-    },
-  });
 
   const wifiConfigMutation = useMutation({
     mutationFn: async (data: { ssid?: string; password?: string; ssid5g?: string; password5g?: string }) => {
@@ -1444,39 +1773,7 @@ export default function DeviceDetail() {
               </TabsContent>
 
               <TabsContent value="diag" className="space-y-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-1"><Activity className="w-4 h-4 text-primary" /> Diagnóstico</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-xs">Ping</Label>
-                        <div className="flex gap-2">
-                          <Input value={pingHost} onChange={(e) => setPingHost(e.target.value)} placeholder="8.8.8.8" className="flex-1" data-testid="input-ping-host" />
-                          <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "ping", host: pingHost })} disabled={diagnosticMutation.isPending || !device.genieId} data-testid="button-test-ping">
-                            {diagnosticMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">Traceroute</Label>
-                        <div className="flex gap-2">
-                          <Input value={traceHost} onChange={(e) => setTraceHost(e.target.value)} placeholder="8.8.8.8" className="flex-1" data-testid="input-trace-host" />
-                          <Button size="sm" onClick={() => diagnosticMutation.mutate({ type: "traceroute", host: traceHost })} disabled={diagnosticMutation.isPending || !device.genieId} data-testid="button-test-traceroute">
-                            {diagnosticMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    {!device.genieId && (
-                      <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
-                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                        <span className="text-xs">Dispositivo não vinculado ao GenieACS.</span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                <DiagnosticsPanel deviceId={params?.id || ""} genieId={device.genieId || ""} />
               </TabsContent>
 
               <TabsContent value="linked" className="space-y-4">

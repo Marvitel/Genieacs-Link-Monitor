@@ -616,10 +616,10 @@ export async function registerRoutes(
     if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });
     if (!device.genieId) return res.status(400).json({ message: "Dispositivo não vinculado ao GenieACS" });
 
-    const type = req.params.type as "ping" | "traceroute";
+    const type = req.params.type as "ping" | "traceroute" | "download" | "upload";
     try {
       const result = await genieGetDiagnosticResult(device.genieId, type);
-      res.json(result);
+      res.json(result || {});
     } catch (error) {
       handleGenieError(error, res);
     }
