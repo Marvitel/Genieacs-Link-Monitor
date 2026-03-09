@@ -43,7 +43,9 @@ async function genieGet(path: string): Promise<unknown[]> {
 
 const IS_TR181_CHECK = `
 const pc = declare("DeviceID.ProductClass", {value: 1}).value[0] || "";
+const mfr = declare("DeviceID.Manufacturer", {value: 1}).value[0] || "";
 const isTR181 = (pc === "Device2" || pc.indexOf("XX530") >= 0 || pc.indexOf("XX230") >= 0 || pc.indexOf("EX520") >= 0 || pc.indexOf("EX141") >= 0 || pc.indexOf("XC220") >= 0);
+const isTPLink = (mfr.indexOf("TP-Link") >= 0);
 `;
 
 const PROVISIONS: Record<string, string> = {
@@ -132,6 +134,13 @@ if (!isTR181) {
   declare("Device.PPP.Interface.*.LowerLayers", {value: hourly});
   declare("Device.Ethernet.VLANTermination.*.VLANID", {value: hourly});
   declare("Device.Ethernet.VLANTermination.*.Name", {value: hourly});
+
+  if (isTPLink) {
+    declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.MACAddress", {value: hourly});
+    declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.ExternalIPAddress", {value: now});
+    declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Username", {value: hourly});
+    declare("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.ConnectionStatus", {value: now});
+  }
 }
 `,
 
