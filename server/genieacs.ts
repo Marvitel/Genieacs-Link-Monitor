@@ -313,6 +313,42 @@ export async function genieRunDiagnostic(
   return true;
 }
 
+function flattenGenieObject(obj: any, prefix: string = ""): Record<string, any> {
+  const result: Record<string, any> = {};
+  if (!obj || typeof obj !== "object") return result;
+  for (const key of Object.keys(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    const val = obj[key];
+    if (val && typeof val === "object" && "_value" in val) {
+      result[fullKey] = val;
+    } else if (val && typeof val === "object" && !Array.isArray(val)) {
+      Object.assign(result, flattenGenieObject(val, fullKey));
+    } else {
+      result[fullKey] = val;
+    }
+  }
+  return result;
+}
+
+export async function genieRefreshObject(deviceId: string, objectName: string): Promise<void> {
+  const task = {
+    name: "refreshObject",
+    objectName: objectName,
+  };
+  const url = `${GENIEACS_NBI_URL}/devices/${encodeURIComponent(deviceId)}/tasks?timeout=5000&connection_request`;
+  try {
+    const res = await genieFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(task),
+    });
+    if (res.status === 202) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  } catch (e) {
+  }
+}
+
 export async function genieGetDiagnosticResult(
   deviceId: string,
   diagnosticType: "ping" | "traceroute" | "download" | "upload"
@@ -325,9 +361,14 @@ export async function genieGetDiagnosticResult(
   };
   const path = pathMap[diagnosticType];
   if (!path) return null;
+
+  await genieRefreshObject(deviceId, path);
+
   const result = await genieGetDeviceParameters(deviceId, path);
   if (!result) return null;
-  return result as Record<string, unknown>;
+
+  const flat = flattenGenieObject(result);
+  return flat;
 }
 
 export async function genieDownloadFirmware(

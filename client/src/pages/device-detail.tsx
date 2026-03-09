@@ -484,15 +484,20 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
           setActiveDiag(null);
           toast({ title: "Diagnóstico falhou", description: state, variant: "destructive" });
         } else {
-          setPollCount(c => {
-            if (c >= 30) { setPolling(false); setActiveDiag(null); toast({ title: "Timeout", description: "O diagnóstico demorou demais", variant: "destructive" }); }
-            return c + 1;
-          });
+          setPollCount(c => c + 1);
         }
       } catch { setPollCount(c => c + 1); }
-    }, 3000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [polling, activeDiag, deviceId]);
+
+  useEffect(() => {
+    if (pollCount >= 40 && polling) {
+      setPolling(false);
+      setActiveDiag(null);
+      toast({ title: "Timeout", description: "O diagnóstico demorou demais", variant: "destructive" });
+    }
+  }, [pollCount, polling]);
 
   const getVal = (obj: any, suffix: string): string => {
     if (!obj) return "";
