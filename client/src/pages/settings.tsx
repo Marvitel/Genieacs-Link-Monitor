@@ -60,6 +60,8 @@ interface ApiKeyItem {
   name: string;
   keyPrefix: string;
   permissions: string;
+  authType: string;
+  basicUsername: string;
   active: boolean;
   lastUsedAt: string | null;
   createdAt: string | null;
@@ -86,6 +88,9 @@ export default function Settings() {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyPerms, setNewKeyPerms] = useState("read");
+  const [newKeyAuthType, setNewKeyAuthType] = useState<"token" | "basic">("token");
+  const [newBasicUsername, setNewBasicUsername] = useState("");
+  const [newBasicPassword, setNewBasicPassword] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [showCreatedKey, setShowCreatedKey] = useState(false);
 
@@ -197,14 +202,23 @@ export default function Settings() {
 
   const createKeyMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/api-keys", { name: newKeyName, permissions: newKeyPerms });
+      const body: Record<string, string> = { name: newKeyName, permissions: newKeyPerms, authType: newKeyAuthType };
+      if (newKeyAuthType === "basic") {
+        body.basicUsername = newBasicUsername;
+        body.basicPassword = newBasicPassword;
+      }
+      const res = await apiRequest("POST", "/api/api-keys", body);
       return res.json();
     },
-    onSuccess: (data: { key: string }) => {
-      setCreatedKey(data.key);
-      setShowCreatedKey(true);
+    onSuccess: (data: { key?: string; authType?: string }) => {
+      if (data.key) {
+        setCreatedKey(data.key);
+        setShowCreatedKey(true);
+      } else {
+        setKeyDialogOpen(false);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/api-keys"] });
-      toast({ title: "Chave API criada" });
+      toast({ title: newKeyAuthType === "basic" ? "Credencial Basic Auth criada" : "Chave API criada" });
     },
     onError: (err: Error) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
   });
@@ -530,7 +544,7 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">{apiKeys.length} chave(s) ativa(s)</p>
-                <Button size="sm" onClick={() => { setNewKeyName(""); setNewKeyPerms("read"); setCreatedKey(null); setKeyDialogOpen(true); }} data-testid="button-create-api-key">
+                <Button size="sm" onClick={() => { setNewKeyName(""); setNewKeyPerms("read"); setNewKeyAuthType("token"); setNewBasicUsername(""); setNewBasicPassword(""); setCreatedKey(null); setKeyDialogOpen(true); }} data-testid="button-create-api-key">
                   <Plus className="w-4 h-4 mr-1" />
                   Nova Chave
                 </Button>
@@ -555,6 +569,7 @@ export default function Settings() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-[10px]">{k.authType === "basic" ? "Basic Auth" : "Token"}</Badge>
                         <Badge variant="outline" className="text-[10px]">{permLabels[k.permissions] || k.permissions}</Badge>
                         {k.lastUsedAt && (
                           <span className="text-[10px] text-muted-foreground">
@@ -578,13 +593,18 @@ export default function Settings() {
 
               <div className="p-3 rounded-md bg-muted/30 space-y-1">
                 <p className="text-xs font-medium">Como usar</p>
+                <p className="text-xs text-muted-foreground font-medium mt-1">Token API:</p>
                 <p className="text-xs text-muted-foreground">
                   Header: <code className="bg-muted px-1 rounded">x-api-key: nc_sua_chave</code>
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Query: <code className="bg-muted px-1 rounded">?apikey=nc_sua_chave</code>
                 </p>
+                <p className="text-xs text-muted-foreground font-medium mt-1">Basic Auth (Voalle):</p>
                 <p className="text-xs text-muted-foreground">
+                  Header: <code className="bg-muted px-1 rounded">Authorization: Basic base64(usuario:senha)</code>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
                   Endpoints: <code className="bg-muted px-1 rounded">/api/v2/device/update/:mac</code>, <code className="bg-muted px-1 rounded">/api/v3/device/pppoe-username/:user/</code>
                 </p>
               </div>
@@ -752,9 +772,36 @@ export default function Settings() {
           ) : (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Nome da Chave</Label>
-                <Input value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="Ex: Voalle, Link-Watcher-Pro" data-testid="input-key-name" />
+                <Label>Tipo de Autenticação</Label>
+                <Select value={newKeyAuthType} onValueChange={(v) => setNewKeyAuthType(v as "token" | "basic")}>
+                  <SelectTrigger data-testid="select-auth-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="token">Token API (x-api-key)</SelectItem>
+                    <SelectItem value="basic">Credencial Basic Auth (usuário/senha)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+              <div className="space-y-2">
+                <Label>Nome / Descrição</Label>
+                <Input value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder={newKeyAuthType === "basic" ? "Ex: Voalle Produção" : "Ex: Link-Watcher-Pro"} data-testid="input-key-name" />
+              </div>
+              {newKeyAuthType === "basic" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Usuário</Label>
+                    <Input value={newBasicUsername} onChange={(e) => setNewBasicUsername(e.target.value)} placeholder="Ex: voalle_api" data-testid="input-basic-username" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Senha</Label>
+                    <Input type="password" value={newBasicPassword} onChange={(e) => setNewBasicPassword(e.target.value)} placeholder="Senha para autenticação" data-testid="input-basic-password" />
+                  </div>
+                  <div className="p-2 rounded-md bg-blue-500/10 border border-blue-500/20">
+                    <p className="text-xs text-blue-600 dark:text-blue-400">Configure no Voalle: usuário e senha acima como credenciais Basic Auth para a API Flashman.</p>
+                  </div>
+                </>
+              )}
               <div className="space-y-2">
                 <Label>Permissões</Label>
                 <Select value={newKeyPerms} onValueChange={setNewKeyPerms}>
@@ -770,9 +817,13 @@ export default function Settings() {
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setKeyDialogOpen(false)}>Cancelar</Button>
-                <Button onClick={() => createKeyMutation.mutate()} disabled={!newKeyName || createKeyMutation.isPending} data-testid="button-confirm-create-key">
+                <Button
+                  onClick={() => createKeyMutation.mutate()}
+                  disabled={!newKeyName || createKeyMutation.isPending || (newKeyAuthType === "basic" && (!newBasicUsername || !newBasicPassword))}
+                  data-testid="button-confirm-create-key"
+                >
                   {createKeyMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                  Criar Chave
+                  {newKeyAuthType === "basic" ? "Criar Credencial" : "Criar Chave"}
                 </Button>
               </DialogFooter>
             </div>

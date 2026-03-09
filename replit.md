@@ -14,7 +14,7 @@ NetControl ACS utilizes a modern web stack.
 - **ACS Engine**: GenieACS serves as the core CWMP/TR-069 engine for device communication.
 - **Deployment**: The entire system is containerized using Docker Compose for simplified deployment in production datacenters.
 - **UI/UX**: The application employs Shadcn UI and TailwindCSS for a consistent and modern design aesthetic, focusing on clarity and ease of use.
-- **Authentication & Authorization**: Session-based authentication with `express-session` and `PgStore` is implemented. It supports role-based access control (admin, operator, viewer) and API key authentication for external integrations.
+- **Authentication & Authorization**: Session-based authentication with `express-session` and `PgStore` is implemented. It supports role-based access control (admin, operator, viewer), API key token authentication (x-api-key header), and Basic Auth credentials (username/password) for external integrations like Voalle. Both token and Basic Auth credentials are managed via Settings > API Keys UI.
 - **GenieACS Integration**: The system includes extensive auto-setup capabilities for GenieACS, creating provisions and presets to manage various device parameters efficiently while critically avoiding `too_many_commits` issues by careful channel and value declaration strategies.
 - **Device Configuration Management**: Features include config backup, restore, and auto-restore after factory reset. This is achieved by storing device configurations and applying them via TR-069 setParameterValues tasks.
 - **ONT Migration/Replacement**: The system supports migrating configurations from an old ONT to a new one, streamlining device replacements.

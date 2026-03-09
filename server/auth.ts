@@ -71,8 +71,21 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
     const basicAuth = req.headers.authorization;
     if (basicAuth?.startsWith("Basic ")) {
       const decoded = Buffer.from(basicAuth.slice(6), "base64").toString();
-      const [username, password] = decoded.split(":");
-      if (username && password) {
+      const sepIdx = decoded.indexOf(":");
+      if (sepIdx > 0) {
+        const username = decoded.substring(0, sepIdx);
+        const password = decoded.substring(sepIdx + 1);
+
+        const allKeys = await storage.getApiKeys();
+        const basicKey = allKeys.find(k => k.active && k.authType === "basic" && k.basicUsername === username);
+        if (basicKey && basicKey.basicPasswordHash && await bcrypt.compare(password, basicKey.basicPasswordHash)) {
+          storage.updateApiKeyLastUsed(basicKey.id).catch(() => {});
+          (req as any).apiKeyId = basicKey.id;
+          (req as any).apiKeyPermissions = basicKey.permissions;
+          next();
+          return;
+        }
+
         const user = await storage.getUserByUsername(username);
         if (user && user.active && await bcrypt.compare(password, user.password)) {
           (req as any).authenticatedUser = { id: user.id, username: user.username, role: user.role };
@@ -92,7 +105,7 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
 
   const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
   const allKeys = await storage.getApiKeys();
-  const matchedKey = allKeys.find(k => k.active && k.keyHash === keyHash);
+  const matchedKey = allKeys.find(k => k.active && k.authType !== "basic" && k.keyHash === keyHash);
 
   if (!matchedKey) {
     res.status(401).json({ message: "API key inválida" });

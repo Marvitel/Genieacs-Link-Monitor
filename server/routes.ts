@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import crypto from "crypto";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
@@ -218,19 +219,46 @@ export async function registerRoutes(
 
   app.get("/api/api-keys", requireAdmin, async (_req, res) => {
     const keys = await storage.getApiKeys();
-    const safe = keys.map(k => ({ id: k.id, name: k.name, keyPrefix: k.keyPrefix, permissions: k.permissions, active: k.active, lastUsedAt: k.lastUsedAt, createdAt: k.createdAt }));
+    const safe = keys.map(k => ({ id: k.id, name: k.name, keyPrefix: k.keyPrefix, permissions: k.permissions, authType: k.authType || "token", basicUsername: k.basicUsername || "", active: k.active, lastUsedAt: k.lastUsedAt, createdAt: k.createdAt }));
     res.json(safe);
   });
 
   app.post("/api/api-keys", requireAdmin, async (req, res) => {
-    const schema = z.object({ name: z.string().min(1), permissions: z.enum(["read", "read_write", "full"]).default("read") });
+    const schema = z.object({
+      name: z.string().min(1),
+      permissions: z.enum(["read", "read_write", "full"]).default("read"),
+      authType: z.enum(["token", "basic"]).default("token"),
+      basicUsername: z.string().optional(),
+      basicPassword: z.string().optional(),
+    });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
-    const rawKey = generateApiKey();
-    const keyHash = hashApiKey(rawKey);
-    const keyPrefix = rawKey.substring(0, 10) + "...";
-    const apiKey = await storage.createApiKey({ name: parsed.data.name, keyHash, keyPrefix, permissions: parsed.data.permissions, createdBy: req.session.userId });
-    res.status(201).json({ id: apiKey.id, name: apiKey.name, key: rawKey, keyPrefix, permissions: apiKey.permissions });
+
+    if (parsed.data.authType === "basic") {
+      if (!parsed.data.basicUsername || !parsed.data.basicPassword) {
+        return res.status(400).json({ message: "Usuário e senha são obrigatórios para credenciais Basic Auth" });
+      }
+      const existingKeys = await storage.getApiKeys();
+      const duplicate = existingKeys.find(k => k.authType === "basic" && k.basicUsername === parsed.data.basicUsername && k.active);
+      if (duplicate) {
+        return res.status(400).json({ message: "Já existe uma credencial ativa com este usuário" });
+      }
+      const basicPasswordHash = await bcrypt.hash(parsed.data.basicPassword, 10);
+      const keyHash = hashApiKey(`basic_${crypto.randomBytes(16).toString("hex")}_${parsed.data.basicUsername}`);
+      const keyPrefix = `${parsed.data.basicUsername}:****`;
+      const apiKey = await storage.createApiKey({
+        name: parsed.data.name, keyHash, keyPrefix, permissions: parsed.data.permissions,
+        authType: "basic", basicUsername: parsed.data.basicUsername, basicPasswordHash,
+        createdBy: req.session.userId,
+      });
+      res.status(201).json({ id: apiKey.id, name: apiKey.name, keyPrefix, permissions: apiKey.permissions, authType: "basic", basicUsername: parsed.data.basicUsername });
+    } else {
+      const rawKey = generateApiKey();
+      const keyHash = hashApiKey(rawKey);
+      const keyPrefix = rawKey.substring(0, 10) + "...";
+      const apiKey = await storage.createApiKey({ name: parsed.data.name, keyHash, keyPrefix, permissions: parsed.data.permissions, authType: "token", createdBy: req.session.userId });
+      res.status(201).json({ id: apiKey.id, name: apiKey.name, key: rawKey, keyPrefix, permissions: apiKey.permissions, authType: "token" });
+    }
   });
 
   app.delete("/api/api-keys/:id", requireAdmin, async (req, res) => {
