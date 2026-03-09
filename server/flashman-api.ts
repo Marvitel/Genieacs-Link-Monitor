@@ -336,6 +336,7 @@ export function registerFlashmanAPI(app: Express): void {
           break;
         }
         case "onlinedevices":
+        case "onlinedevs":
           res.json({ success: true, message: "Online devices refresh triggered" });
           break;
         default:
