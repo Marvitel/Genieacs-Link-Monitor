@@ -460,7 +460,8 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
     let cancelled = false;
     const interval = setInterval(async () => {
       if (cancelled) return;
-      if (pollCountRef.current >= 30) {
+      const maxPolls = (activeDiag === "download" || activeDiag === "upload") ? 120 : 30;
+      if (pollCountRef.current >= maxPolls) {
         setPolling(false);
         setActiveDiag(null);
         toast({ title: "Timeout", description: "O diagnóstico demorou demais. O dispositivo pode não suportar este teste.", variant: "destructive" });
@@ -796,7 +797,7 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
       {isRunning && (
         <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400">
           <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
-          <span className="text-xs">Aguardando resposta do dispositivo... ({pollCount}/30)</span>
+          <span className="text-xs">Aguardando resposta do dispositivo... ({pollCount}/{(activeDiag === "download" || activeDiag === "upload") ? 120 : 30})</span>
         </div>
       )}
     </>
