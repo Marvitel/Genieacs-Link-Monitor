@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -450,15 +450,26 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
     },
   });
 
+  const pollCountRef = useRef(0);
+  pollCountRef.current = pollCount;
+
   useEffect(() => {
     if (!polling || !activeDiag) return;
+    let cancelled = false;
     const interval = setInterval(async () => {
+      if (cancelled) return;
+      if (pollCountRef.current >= 30) {
+        setPolling(false);
+        setActiveDiag(null);
+        toast({ title: "Timeout", description: "O diagnóstico demorou demais. O dispositivo pode não suportar este teste.", variant: "destructive" });
+        return;
+      }
       try {
         const res = await fetch(`/api/devices/${deviceId}/diagnostic/${activeDiag}`, { credentials: "include" });
-        if (!res.ok) { setPolling(false); return; }
+        if (!res.ok || cancelled) { if (!cancelled) setPolling(false); return; }
         const data = await res.json();
 
-        const getVal = (obj: any, suffix: string): string => {
+        const findVal = (obj: any, suffix: string): string => {
           if (!obj) return "";
           for (const key of Object.keys(obj)) {
             if (key.endsWith(`.${suffix}`)) {
@@ -470,7 +481,7 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
           return "";
         };
 
-        const state = getVal(data, "DiagnosticsState");
+        const state = findVal(data, "DiagnosticsState");
         if (state === "Complete" || state === "Completed") {
           setPolling(false);
           if (activeDiag === "ping") setPingResult(data);
@@ -488,16 +499,8 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
         }
       } catch { setPollCount(c => c + 1); }
     }, 5000);
-    return () => clearInterval(interval);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [polling, activeDiag, deviceId]);
-
-  useEffect(() => {
-    if (pollCount >= 40 && polling) {
-      setPolling(false);
-      setActiveDiag(null);
-      toast({ title: "Timeout", description: "O diagnóstico demorou demais", variant: "destructive" });
-    }
-  }, [pollCount, polling]);
 
   const getVal = (obj: any, suffix: string): string => {
     if (!obj) return "";
