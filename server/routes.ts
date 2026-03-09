@@ -360,6 +360,115 @@ export async function registerRoutes(
     res.json({ parent: parent || null, children });
   });
 
+  const MESH_MODELS = ["EX520", "EX220", "EX141", "EX230", "AP820", "AX1800", "AX1800V", "121AC", "EX220V2"];
+
+  function isMeshModel(model: string): boolean {
+    return MESH_MODELS.some(m => model.toUpperCase().includes(m.toUpperCase()));
+  }
+
+  function isOntDevice(d: { pppoeUser: string | null; connectionType: string | null; deviceType: string }): boolean {
+    return !!d.pppoeUser || d.connectionType === "PPPoE" || d.connectionType === "pppoe" ||
+           (d.deviceType === "ont" && d.connectionType !== "DHCP" && d.connectionType !== "dhcp");
+  }
+
+  function isMeshCandidate(d: { pppoeUser: string | null; connectionType: string | null; deviceType: string; model: string }): boolean {
+    if (d.deviceType === "mesh" || d.deviceType === "router") return true;
+    if (isMeshModel(d.model)) return true;
+    if (!d.pppoeUser && (d.connectionType === "DHCP" || d.connectionType === "dhcp")) return true;
+    return false;
+  }
+
+  app.post("/api/devices/auto-link", async (_req, res) => {
+    try {
+      const allDevices = await storage.getDevices();
+      let linked = 0;
+      let reclassified = 0;
+
+      for (const d of allDevices) {
+        if (isMeshModel(d.model) && d.deviceType !== "mesh" && !d.pppoeUser) {
+          await storage.updateDevice(d.id, { deviceType: "mesh" } as any);
+          reclassified++;
+        }
+      }
+
+      const ssidMap = new Map<string, typeof allDevices>();
+      for (const d of allDevices) {
+        if (!d.ssid || !d.genieId) continue;
+        const ssidKey = d.ssid.toLowerCase().trim();
+        if (!ssidMap.has(ssidKey)) ssidMap.set(ssidKey, []);
+        ssidMap.get(ssidKey)!.push(d);
+      }
+
+      for (const [ssid, group] of ssidMap) {
+        if (group.length < 2) continue;
+        const onts = group.filter(d => isOntDevice(d));
+        const meshes = group.filter(d => isMeshCandidate(d) && !isOntDevice(d));
+
+        if (onts.length === 1 && meshes.length > 0) {
+          for (const mesh of meshes) {
+            if (mesh.parentDeviceId === onts[0].id) continue;
+            await storage.updateDevice(mesh.id, { parentDeviceId: onts[0].id } as any);
+            linked++;
+            await storage.createDeviceLog({
+              deviceId: mesh.id,
+              eventType: "auto-link",
+              message: `Auto-vinculado à ONT ${onts[0].manufacturer} ${onts[0].model} (${onts[0].serialNumber}) via SSID "${ssid}"`,
+              severity: "info",
+            });
+          }
+        }
+      }
+
+      if (linked === 0) {
+        const ontsOnline = allDevices.filter(d => d.genieId && d.status === "online" && isOntDevice(d));
+        const unlinkedMeshes = allDevices.filter(d => d.genieId && !d.parentDeviceId && isMeshCandidate(d) && !isOntDevice(d));
+        const BATCH_SIZE = 5;
+
+        for (let i = 0; i < ontsOnline.length; i += BATCH_SIZE) {
+          const batch = ontsOnline.slice(i, i + BATCH_SIZE);
+          await Promise.allSettled(batch.map(async (ont) => {
+            try {
+              const genieDevice = await genieGetDevice(ont.genieId!);
+              if (!genieDevice) return;
+              const liveData = extractLiveDeviceInfo(genieDevice);
+              const hosts = liveData.connectedHosts || [];
+
+              for (const mesh of unlinkedMeshes) {
+                if (mesh.parentDeviceId) continue;
+                const normMac = (s: string) => s.toLowerCase().replace(/[:\-]/g, "");
+                const matchByMac = mesh.macAddress && hosts.some((h: any) =>
+                  h.macAddress && mesh.macAddress && normMac(h.macAddress) === normMac(mesh.macAddress)
+                );
+                const matchByIp = mesh.ipAddress && hosts.some((h: any) =>
+                  h.ipAddress && h.ipAddress === mesh.ipAddress && h.active
+                );
+                if (matchByMac || matchByIp) {
+                  await storage.updateDevice(mesh.id, { parentDeviceId: ont.id } as any);
+                  mesh.parentDeviceId = ont.id;
+                  linked++;
+                  await storage.createDeviceLog({
+                    deviceId: mesh.id,
+                    eventType: "auto-link",
+                    message: `Auto-vinculado à ONT ${ont.manufacturer} ${ont.model} (${ont.serialNumber}) via ${matchByMac ? 'MAC' : 'IP'} nos hosts conectados`,
+                    severity: "info",
+                  });
+                }
+              }
+            } catch {}
+          }));
+        }
+      }
+
+      res.json({
+        message: `Auto-vinculação concluída: ${linked} vinculados, ${reclassified} reclassificados como mesh`,
+        linked,
+        reclassified,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/devices/:id/live", async (req, res) => {
     const device = await storage.getDevice(req.params.id);
     if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });

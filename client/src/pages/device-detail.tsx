@@ -1450,10 +1450,11 @@ export default function DeviceDetail() {
                     <CardTitle className="text-sm font-medium flex items-center gap-1">
                       <Cable className="w-4 h-4 text-primary" /> Dispositivos Vinculados
                     </CardTitle>
+                    <div className="flex items-center gap-2">
                     <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm" data-testid="button-link-device">
-                          <Cable className="w-3 h-3 mr-1" /> Vincular
+                          <Cable className="w-3 h-3 mr-1" /> Vincular Manual
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
