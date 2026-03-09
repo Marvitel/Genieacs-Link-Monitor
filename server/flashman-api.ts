@@ -21,13 +21,27 @@ function requireWritePermission(req: Request, res: Response, next: NextFunction)
   next();
 }
 
+function safeNum(val: any, fallback: number = 0): number {
+  if (val == null || val === "") return fallback;
+  const n = Number(val);
+  return isNaN(n) ? fallback : n;
+}
+
+function safeStr(val: any, fallback: string = ""): string {
+  if (val == null) return fallback;
+  return String(val);
+}
+
 function deviceToFlashmanFormat(device: Device, liveData?: any): any {
   const cfg = device.savedConfig as SavedDeviceConfig | null;
-  const lastContact = device.lastSeen ? new Date(device.lastSeen).toISOString() : "";
+  const lastContact = device.lastSeen ? new Date(device.lastSeen).toISOString() : new Date(0).toISOString();
   const isOnline = device.status === "online";
 
+  const wifiChannel2g = safeNum(liveData?.wifiChannel || cfg?.wifi?.channel || device.wifiChannel, 0);
+  const wifiChannel5g = safeNum(liveData?.wifiChannel5g || cfg?.wifi?.channel5g || device.wifiChannel5g, 0);
+
   const result: any = {
-    _id: device.macAddress || device.serialNumber,
+    _id: device.macAddress || device.serialNumber || "",
     model: device.model || "",
     version: device.firmwareVersion || "",
     hw_version: device.hardwareVersion || "",
@@ -38,37 +52,46 @@ function deviceToFlashmanFormat(device: Device, liveData?: any): any {
     wan_ip: liveData?.wanConnections?.[0]?.ipAddress || device.ipAddress || "",
     ip: device.ipAddress || "",
     last_contact: lastContact,
-    uptime: device.uptime || "",
-    sys_up_time: device.uptime || "",
-    serial_tr069: device.serialNumber,
+    uptime: safeNum(device.uptime, 0),
+    sys_up_time: safeNum(device.uptime, 0),
+    do_update: false,
+    do_update_parameters: false,
+    serial_tr069: device.serialNumber || "",
     alt_uid_tr069: device.genieId || "",
     acs_id: device.genieId || "",
+    use_tr069: true,
     wifi_ssid: liveData?.wifiSSID || cfg?.wifi?.ssid || device.ssid || "",
     wifi_password: liveData?.wifiPassword || cfg?.wifi?.password || device.wifiPassword || "",
-    wifi_channel: liveData?.wifiChannel || String(cfg?.wifi?.channel || device.wifiChannel || ""),
+    wifi_channel: String(wifiChannel2g || "auto"),
     wifi_band: device.wifiBand || "auto",
     wifi_mode: "11bgn",
     wifi_state: 1,
     wifi_hidden: 0,
+    wifi_is_5ghz_capable: true,
     wifi_ssid_5ghz: liveData?.wifiSSID5g || cfg?.wifi?.ssid5g || device.ssid5g || "",
     wifi_password_5ghz: liveData?.wifiPassword5g || cfg?.wifi?.password5g || device.wifiPassword5g || "",
-    wifi_channel_5ghz: liveData?.wifiChannel5g || String(cfg?.wifi?.channel5g || device.wifiChannel5g || ""),
+    wifi_channel_5ghz: String(wifiChannel5g || "auto"),
     wifi_band_5ghz: "auto",
     wifi_mode_5ghz: "11ac",
     wifi_state_5ghz: 1,
     wifi_hidden_5ghz: 0,
     lan_subnet: liveData?.lanIp || cfg?.lan?.lanIp || "192.168.1.1",
     lan_netmask: liveData?.lanSubnet || cfg?.lan?.lanSubnet || "255.255.255.0",
-    pon_rxpower: device.rxPower != null ? String(device.rxPower) : "",
-    pon_txpower: device.txPower != null ? String(device.txPower) : "",
+    pon_rxpower: safeNum(liveData?.rxPower ?? device.rxPower, 0),
+    pon_txpower: safeNum(liveData?.txPower ?? device.txPower, 0),
+    pon_signal_measure: "dBm",
+    mesh_mode: 0,
+    mesh_master: "",
+    mesh_slaves: [],
+    bridge_mode_enabled: false,
     online_devices: liveData?.lanDevices?.map((d: any) => ({
-      mac: d.macAddress || d.mac,
+      mac: d.macAddress || d.mac || "",
       hostname: d.hostName || d.hostname || "",
       ip: d.ipAddress || d.ip || "",
       conn_type: d.connectionType || "ethernet",
     })) || [],
     lan_devices: liveData?.lanDevices?.map((d: any) => ({
-      mac: d.macAddress || d.mac,
+      mac: d.macAddress || d.mac || "",
       hostname: d.hostName || d.hostname || "",
       ip: d.ipAddress || d.ip || "",
     })) || [],
@@ -79,11 +102,14 @@ function deviceToFlashmanFormat(device: Device, liveData?: any): any {
       wan_type: w.type === "PPPoE" ? "pppoe" : "dhcp",
       wan_ip: w.ipAddress || "",
       wan_mac: w.macAddress || "",
-      wan_vlan: w.vlanId || "",
+      wan_vlan: safeNum(w.vlanId, 0),
+      wan_vlan_id: safeNum(w.vlanId, 0),
       wan_status: w.status === "Connected" ? "up" : "down",
       pppoe_user: w.username || "",
     })) || [],
     is_license_active: true,
+    blocklist_enabled: false,
+    forward_index: 0,
   };
 
   return result;
@@ -196,7 +222,7 @@ export function registerFlashmanAPI(app: Express): void {
             mac_address: device.macAddress || "",
             firmware: device.firmwareVersion || liveData?.firmwareVersion || "",
             hardware: device.hardwareVersion || liveData?.hardwareVersion || "",
-            uptime: liveData?.uptime || device.uptime || "",
+            uptime: safeNum(liveData?.uptime || device.uptime, 0),
             last_inform: liveData?.lastInform || "",
             last_boot: liveData?.lastBoot || "",
             product_class: liveData?.productClass || "",
@@ -204,10 +230,10 @@ export function registerFlashmanAPI(app: Express): void {
           },
 
           signal: {
-            rx_power: liveData?.rxPower ?? (device.rxPower != null ? device.rxPower : null),
-            tx_power: liveData?.txPower ?? (device.txPower != null ? device.txPower : null),
-            temperature: liveData?.temperature ?? null,
-            voltage: liveData?.voltage ?? null,
+            rx_power: safeNum(liveData?.rxPower ?? device.rxPower, 0),
+            tx_power: safeNum(liveData?.txPower ?? device.txPower, 0),
+            temperature: safeNum(liveData?.temperature, 0),
+            voltage: safeNum(liveData?.voltage, 0),
           },
 
           wan: {
@@ -230,11 +256,11 @@ export function registerFlashmanAPI(app: Express): void {
             enabled_2g: liveData?.wifiEnabled ?? true,
             ssid_2g: liveData?.wifiSSID || cfg?.wifi?.ssid || device.ssid || "",
             password_2g: liveData?.wifiPassword || cfg?.wifi?.password || device.wifiPassword || "",
-            channel_2g: liveData?.wifiChannel || cfg?.wifi?.channel || device.wifiChannel || "",
+            channel_2g: String(safeNum(liveData?.wifiChannel || cfg?.wifi?.channel || device.wifiChannel, 0) || "auto"),
             enabled_5g: liveData?.wifiEnabled5g ?? false,
             ssid_5g: liveData?.wifiSSID5g || cfg?.wifi?.ssid5g || device.ssid5g || "",
             password_5g: liveData?.wifiPassword5g || cfg?.wifi?.password5g || device.wifiPassword5g || "",
-            channel_5g: liveData?.wifiChannel5g || cfg?.wifi?.channel5g || device.wifiChannel5g || "",
+            channel_5g: String(safeNum(liveData?.wifiChannel5g || cfg?.wifi?.channel5g || device.wifiChannel5g, 0) || "auto"),
           },
 
           hosts: {
@@ -247,8 +273,8 @@ export function registerFlashmanAPI(app: Express): void {
           },
 
           resources: {
-            memory_free: liveData?.memoryUsage ?? null,
-            cpu_usage: liveData?.cpuUsage ?? null,
+            memory_free: safeNum(liveData?.memoryUsage, 0),
+            cpu_usage: safeNum(liveData?.cpuUsage, 0),
           },
 
           backup: cfg ? {
