@@ -110,6 +110,8 @@ function deviceToFlashmanFormat(device: Device, liveData?: any): any {
     is_license_active: true,
     blocklist_enabled: false,
     forward_index: 0,
+    latitude: device.latitude || "",
+    longitude: device.longitude || "",
   };
 
   return result;
@@ -223,6 +225,64 @@ export function registerFlashmanAPI(app: Express): void {
     } catch (error: any) {
       console.error(`[Flashman API] PUT update error: ${error.message}`);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/v2/device/coordinates", requireApiKey, requireWritePermission, async (req: Request, res: Response) => {
+    try {
+      const devices = req.body?.devices || [];
+      if (!Array.isArray(devices) || devices.length === 0) {
+        return res.status(400).json({ success: false, message: "No devices provided" });
+      }
+
+      let updated = 0;
+      for (const entry of devices) {
+        const id = entry.id || entry._id;
+        if (!id) continue;
+        const device = await findDeviceByMac(id) || await findDeviceBySerial(id);
+        if (!device) continue;
+
+        const updates: Record<string, any> = {};
+        if (entry.latitude != null) updates.latitude = String(entry.latitude);
+        if (entry.longitude != null) updates.longitude = String(entry.longitude);
+        if (Object.keys(updates).length > 0) {
+          await storage.updateDevice(device.id, updates);
+          updated++;
+        }
+      }
+
+      res.json({ success: true, updated, message: `${updated} device(s) updated` });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
+  app.post("/api/v2/device/coordinates", requireApiKey, requireWritePermission, async (req: Request, res: Response) => {
+    try {
+      const devices = req.body?.devices || [];
+      if (!Array.isArray(devices) || devices.length === 0) {
+        return res.status(400).json({ success: false, message: "No devices provided" });
+      }
+
+      let updated = 0;
+      for (const entry of devices) {
+        const id = entry.id || entry._id;
+        if (!id) continue;
+        const device = await findDeviceByMac(id) || await findDeviceBySerial(id);
+        if (!device) continue;
+
+        const updates: Record<string, any> = {};
+        if (entry.latitude != null) updates.latitude = String(entry.latitude);
+        if (entry.longitude != null) updates.longitude = String(entry.longitude);
+        if (Object.keys(updates).length > 0) {
+          await storage.updateDevice(device.id, updates);
+          updated++;
+        }
+      }
+
+      res.json({ success: true, updated, message: `${updated} device(s) updated` });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
     }
   });
 

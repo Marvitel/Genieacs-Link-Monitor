@@ -34,6 +34,8 @@ pool.query(\`
   ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"replaced_by_device_id\" varchar;
   ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"replaced_at\" timestamp;
   ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"gpon_serial\" text;
+  ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"latitude\" text;
+  ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"longitude\" text;
   ALTER TABLE \"api_keys\" ADD COLUMN IF NOT EXISTS \"auth_type\" text NOT NULL DEFAULT 'token';
   ALTER TABLE \"api_keys\" ADD COLUMN IF NOT EXISTS \"basic_username\" text;
   ALTER TABLE \"api_keys\" ADD COLUMN IF NOT EXISTS \"basic_password_hash\" text;
