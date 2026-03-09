@@ -433,6 +433,7 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
   const [uploadResult, setUploadResult] = useState<any>(null);
   const [polling, setPolling] = useState(false);
   const [pollCount, setPollCount] = useState(0);
+  const diagStartedAt = useRef<number>(0);
 
   const diagnosticMutation = useMutation({
     mutationFn: async ({ type, host }: { type: string; host: string }) => {
@@ -441,6 +442,7 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
     },
     onSuccess: (_, variables) => {
       toast({ title: `${variables.type === "ping" ? "Ping" : variables.type === "traceroute" ? "Traceroute" : variables.type === "download" ? "Download" : "Upload"} iniciado` });
+      diagStartedAt.current = Date.now();
       setActiveDiag(variables.type);
       setPolling(true);
       setPollCount(0);
@@ -481,8 +483,23 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
           return "";
         };
 
+        const findTimestamp = (obj: any, suffix: string): string => {
+          if (!obj) return "";
+          for (const key of Object.keys(obj)) {
+            if (key.endsWith(`.${suffix}`)) {
+              const v = obj[key];
+              if (v && typeof v === "object" && "_timestamp" in v) return String(v._timestamp);
+              return "";
+            }
+          }
+          return "";
+        };
+
         const state = findVal(data, "DiagnosticsState");
-        if (state === "Complete" || state === "Completed") {
+        const stateTs = findTimestamp(data, "DiagnosticsState");
+        const isStale = stateTs && diagStartedAt.current > 0 && new Date(stateTs).getTime() < (diagStartedAt.current - 5000);
+
+        if ((state === "Complete" || state === "Completed") && !isStale) {
           setPolling(false);
           if (activeDiag === "ping") setPingResult(data);
           else if (activeDiag === "traceroute") setTraceResult(data);
@@ -490,7 +507,7 @@ function DiagnosticsPanel({ deviceId, genieId }: { deviceId: string; genieId: st
           else if (activeDiag === "upload") setUploadResult(data);
           setActiveDiag(null);
           toast({ title: "Diagnóstico concluído" });
-        } else if (state === "Error" || state === "Error_Internal" || state === "Error_Other") {
+        } else if ((state === "Error" || state === "Error_Internal" || state === "Error_Other") && !isStale) {
           setPolling(false);
           setActiveDiag(null);
           toast({ title: "Diagnóstico falhou", description: state, variant: "destructive" });
