@@ -31,8 +31,10 @@ pool.query(\`
     \"created_at\" timestamp DEFAULT now()
   );
   ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"parent_device_id\" varchar;
+  ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"replaced_by_device_id\" varchar;
+  ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"replaced_at\" timestamp;
 \`).then(() => {
-  console.log('Session + network_snapshots + parent_device_id ready');
+  console.log('Session + network_snapshots + parent_device_id + replaced columns ready');
   pool.end();
 }).catch(err => {
   console.error('Table creation error:', err.message);
