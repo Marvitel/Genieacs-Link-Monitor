@@ -484,6 +484,36 @@ export default function DeviceDetail() {
     enabled: !!params?.id,
   });
 
+  const { data: allDevices } = useQuery<Device[]>({
+    queryKey: ["/api/devices"],
+  });
+
+  const { data: linkedData } = useQuery<{ parent: Device | null; children: Device[] }>({
+    queryKey: ["/api/devices", params?.id, "linked"],
+    enabled: !!params?.id,
+  });
+
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
+
+  const linkMutation = useMutation({
+    mutationFn: async (parentId: string | null) => {
+      const res = await apiRequest("PATCH", `/api/devices/${params?.id}`, { parentDeviceId: parentId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/devices", params?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices", params?.id, "linked"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+      setLinkDialogOpen(false);
+      setLinkSearch("");
+      toast({ title: "Vínculo atualizado" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao vincular", description: error.message, variant: "destructive" });
+    },
+  });
+
   const rebootMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/devices/${params?.id}/reboot`);
@@ -628,11 +658,6 @@ export default function DeviceDetail() {
   const [migrateDialogOpen, setMigrateDialogOpen] = useState(false);
   const [migrateTargetId, setMigrateTargetId] = useState("");
   const [migrateSearch, setMigrateSearch] = useState("");
-
-  const { data: allDevices } = useQuery<Device[]>({
-    queryKey: ["/api/devices"],
-    enabled: migrateDialogOpen,
-  });
 
   const migrateableDevices = (allDevices || []).filter(d =>
     d.id !== params?.id && d.genieId && !d.replacedByDeviceId &&
@@ -862,6 +887,9 @@ export default function DeviceDetail() {
                   Hosts {connectedHosts.length > 0 && <Badge variant="secondary" className="ml-1 text-[10px]">{connectedHosts.length}</Badge>}
                 </TabsTrigger>
                 <TabsTrigger value="voip" data-testid="tab-voip">VoIP</TabsTrigger>
+                <TabsTrigger value="linked" data-testid="tab-linked">
+                  <Cable className="w-3 h-3 mr-1" /> Vínculos {((linkedData?.children?.length || 0) + (linkedData?.parent ? 1 : 0)) > 0 && <Badge variant="secondary" className="ml-1 text-[10px] px-1">{(linkedData?.children?.length || 0) + (linkedData?.parent ? 1 : 0)}</Badge>}
+                </TabsTrigger>
                 <TabsTrigger value="diag" data-testid="tab-diagnostics">Diag</TabsTrigger>
                 <TabsTrigger value="logs" data-testid="tab-logs">Logs</TabsTrigger>
               </TabsList>
@@ -1410,6 +1438,133 @@ export default function DeviceDetail() {
                       <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
                         <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                         <span className="text-xs">Dispositivo não vinculado ao GenieACS.</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="linked" className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm font-medium flex items-center gap-1">
+                      <Cable className="w-4 h-4 text-primary" /> Dispositivos Vinculados
+                    </CardTitle>
+                    <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" data-testid="button-link-device">
+                          <Cable className="w-3 h-3 mr-1" /> Vincular
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Vincular a um dispositivo pai</DialogTitle>
+                          <DialogDescription>
+                            Selecione a ONT ou roteador ao qual este dispositivo está conectado.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <Input
+                          placeholder="Buscar por serial, modelo, MAC..."
+                          value={linkSearch}
+                          onChange={(e) => setLinkSearch(e.target.value)}
+                          data-testid="input-link-search"
+                        />
+                        <ScrollArea className="max-h-[300px]">
+                          <div className="space-y-1">
+                            {(allDevices || [])
+                              .filter(d => d.id !== params?.id && (
+                                !linkSearch ||
+                                d.serialNumber.toLowerCase().includes(linkSearch.toLowerCase()) ||
+                                d.model.toLowerCase().includes(linkSearch.toLowerCase()) ||
+                                d.manufacturer.toLowerCase().includes(linkSearch.toLowerCase()) ||
+                                (d.macAddress && d.macAddress.toLowerCase().includes(linkSearch.toLowerCase())) ||
+                                (d.pppoeUser && d.pppoeUser.toLowerCase().includes(linkSearch.toLowerCase()))
+                              ))
+                              .slice(0, 20)
+                              .map(d => (
+                                <div
+                                  key={d.id}
+                                  className="flex items-center justify-between p-2 rounded-md hover:bg-muted cursor-pointer"
+                                  onClick={() => linkMutation.mutate(d.id)}
+                                  data-testid={`link-device-${d.id}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={d.status === "online" ? "default" : "secondary"} className="text-[10px]">
+                                      {d.status}
+                                    </Badge>
+                                    <div>
+                                      <span className="text-sm font-medium">{d.manufacturer} {d.model}</span>
+                                      <span className="text-xs text-muted-foreground ml-2">{d.serialNumber}</span>
+                                    </div>
+                                  </div>
+                                  <Badge variant="outline" className="text-[10px]">{d.deviceType}</Badge>
+                                </div>
+                              ))}
+                          </div>
+                        </ScrollArea>
+                      </DialogContent>
+                    </Dialog>
+                  </CardHeader>
+                  <CardContent>
+                    {linkedData?.parent && (
+                      <div className="mb-4">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dispositivo Pai (conectado a)</span>
+                        <Link href={`/devices/${linkedData.parent.id}`}>
+                          <div className="mt-1 flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 cursor-pointer" data-testid="linked-parent-device">
+                            <div className="flex items-center gap-3">
+                              <Badge variant={linkedData.parent.status === "online" ? "default" : "secondary"} className="text-[10px]">
+                                {linkedData.parent.status}
+                              </Badge>
+                              <div>
+                                <div className="text-sm font-medium">{linkedData.parent.manufacturer} {linkedData.parent.model}</div>
+                                <div className="text-xs text-muted-foreground">{linkedData.parent.serialNumber} {linkedData.parent.macAddress && `• ${linkedData.parent.macAddress}`}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px]">{linkedData.parent.deviceType}</Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); linkMutation.mutate(null); }}
+                                data-testid="button-unlink-parent"
+                              >
+                                <ArrowLeftRight className="w-3 h-3 mr-1" /> Desvincular
+                              </Button>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+                    )}
+
+                    {linkedData?.children && linkedData.children.length > 0 && (
+                      <div>
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dispositivos Filhos ({linkedData.children.length})</span>
+                        <div className="mt-1 space-y-1">
+                          {linkedData.children.map(child => (
+                            <Link key={child.id} href={`/devices/${child.id}`}>
+                              <div className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 cursor-pointer" data-testid={`linked-child-${child.id}`}>
+                                <div className="flex items-center gap-3">
+                                  <Badge variant={child.status === "online" ? "default" : "secondary"} className="text-[10px]">
+                                    {child.status}
+                                  </Badge>
+                                  <div>
+                                    <div className="text-sm font-medium">{child.manufacturer} {child.model}</div>
+                                    <div className="text-xs text-muted-foreground">{child.serialNumber} {child.macAddress && `• ${child.macAddress}`}</div>
+                                  </div>
+                                </div>
+                                <Badge variant="outline" className="text-[10px]">{child.deviceType}</Badge>
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!linkedData?.parent && (!linkedData?.children || linkedData.children.length === 0) && (
+                      <div className="text-center py-8 text-muted-foreground" data-testid="no-linked-devices">
+                        <Cable className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">Nenhum dispositivo vinculado</p>
+                        <p className="text-xs mt-1">Use o botão "Vincular" para conectar este dispositivo a uma ONT ou roteador.</p>
                       </div>
                     )}
                   </CardContent>

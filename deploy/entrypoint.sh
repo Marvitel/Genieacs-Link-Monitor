@@ -30,8 +30,9 @@ pool.query(\`
     \"total_count\" integer NOT NULL DEFAULT 0,
     \"created_at\" timestamp DEFAULT now()
   );
+  ALTER TABLE \"devices\" ADD COLUMN IF NOT EXISTS \"parent_device_id\" varchar;
 \`).then(() => {
-  console.log('Session + network_snapshots tables ready');
+  console.log('Session + network_snapshots + parent_device_id ready');
   pool.end();
 }).catch(err => {
   console.error('Table creation error:', err.message);

@@ -352,6 +352,14 @@ export async function registerRoutes(
     res.status(204).end();
   });
 
+  app.get("/api/devices/:id/linked", async (req, res) => {
+    const allDevices = await storage.getDevices();
+    const children = allDevices.filter(d => d.parentDeviceId === req.params.id);
+    const device = allDevices.find(d => d.id === req.params.id);
+    const parent = device?.parentDeviceId ? allDevices.find(d => d.id === device.parentDeviceId) : null;
+    res.json({ parent: parent || null, children });
+  });
+
   app.get("/api/devices/:id/live", async (req, res) => {
     const device = await storage.getDevice(req.params.id);
     if (!device) return res.status(404).json({ message: "Dispositivo não encontrado" });

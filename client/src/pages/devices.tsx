@@ -33,6 +33,7 @@ import {
   Thermometer,
   Eye,
   Filter,
+  Cable,
 } from "lucide-react";
 import type { Device, Client } from "@shared/schema";
 import { DEVICE_TYPES, MANUFACTURERS } from "@shared/schema";
@@ -270,6 +271,10 @@ export default function Devices() {
                           {device.macAddress && <span>MAC: {device.macAddress}</span>}
                           {device.ipAddress && <span>IP: {device.ipAddress}</span>}
                           {client && <span>Cliente: {client.name}</span>}
+                          {device.parentDeviceId && (() => {
+                            const parent = devices?.find(d => d.id === device.parentDeviceId);
+                            return parent ? <span className="flex items-center gap-0.5"><Cable className="w-3 h-3" /> {parent.manufacturer} {parent.model}</span> : null;
+                          })()}
                         </div>
                       </div>
                     </div>
