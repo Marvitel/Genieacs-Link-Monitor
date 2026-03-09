@@ -459,20 +459,28 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     `${dev}.DeviceInfo.UpTime`
   );
 
-  const macAddress = firstOf(device,
-    `${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.MACAddress`,
-    `${igd}.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MACAddress`,
+  let wanMacAddress = "";
+  for (let wci = 1; wci <= 10; wci++) {
+    const pppMac = getVal(device, `${igd}.WANDevice.1.WANConnectionDevice.${wci}.WANPPPConnection.1.MACAddress`) as string | null;
+    if (pppMac && pppMac.includes(":")) { wanMacAddress = pppMac; break; }
+    const ipMac = getVal(device, `${igd}.WANDevice.1.WANConnectionDevice.${wci}.WANIPConnection.1.MACAddress`) as string | null;
+    if (ipMac && ipMac.includes(":")) { wanMacAddress = ipMac; break; }
+  }
+
+  const macAddress = wanMacAddress || (firstOf(device,
     `${igd}.LANDevice.1.LANEthernetInterfaceConfig.1.MACAddress`,
     `${igd}.DeviceInfo.X_CMCC_MAC`,
     `${dev}.Ethernet.Interface.1.MACAddress`,
     `${dev}.DeviceInfo.SerialNumber`
-  ) as string || "";
+  ) as string || "");
 
-  let ipAddress = firstOf(device,
-    `${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress`,
-    `${igd}.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress`,
-    `${igd}.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.ExternalIPAddress`,
-  ) as string || "";
+  let ipAddress = "";
+  for (let wci = 1; wci <= 10; wci++) {
+    const pppIp = getVal(device, `${igd}.WANDevice.1.WANConnectionDevice.${wci}.WANPPPConnection.1.ExternalIPAddress`) as string | null;
+    if (pppIp && pppIp !== "0.0.0.0" && pppIp !== "") { ipAddress = pppIp; break; }
+    const wanIp = getVal(device, `${igd}.WANDevice.1.WANConnectionDevice.${wci}.WANIPConnection.1.ExternalIPAddress`) as string | null;
+    if (wanIp && wanIp !== "0.0.0.0" && wanIp !== "") { ipAddress = wanIp; break; }
+  }
 
   if (!ipAddress) {
     for (let pi = 1; pi <= 10; pi++) {
@@ -495,10 +503,11 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     }
   }
 
-  let pppoeUser = firstOf(device,
-    `${igd}.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username`,
-    `${igd}.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.Username`,
-  ) as string || "";
+  let pppoeUser = "";
+  for (let wci = 1; wci <= 10; wci++) {
+    const user = getVal(device, `${igd}.WANDevice.1.WANConnectionDevice.${wci}.WANPPPConnection.1.Username`) as string | null;
+    if (user) { pppoeUser = user; break; }
+  }
   if (!pppoeUser) {
     for (let pi = 1; pi <= 10; pi++) {
       const user = getVal(device, `${dev}.PPP.Interface.${pi}.Username`) as string | null;
@@ -700,6 +709,7 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     firmwareVersion,
     hardwareVersion,
     macAddress,
+    wanMacAddress,
     ipAddress,
     uptime: uptime !== null ? Number(uptime) : 0,
     ssid,
@@ -715,6 +725,17 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     temperature: finalTemp !== null ? (typeof finalTemp === 'number' && finalTemp > 1000 ? finalTemp / 256 : finalTemp) : null,
     voltage: convertVoltage(finalVolt),
   };
+}
+
+export function calculateGponSerial(manufacturer: string, wanMacAddress: string): string | null {
+  if (!wanMacAddress || !wanMacAddress.includes(":")) return null;
+  const mfr = manufacturer.toLowerCase();
+  if (mfr.includes("tp-link") || mfr.includes("tplink")) {
+    const bytes = wanMacAddress.replace(/:/g, "").toUpperCase().match(/.{2}/g);
+    if (!bytes || bytes.length !== 6) return null;
+    return "54504C47" + bytes[2] + bytes[3] + bytes[4] + bytes[0];
+  }
+  return null;
 }
 
 export interface ConnectedHost {

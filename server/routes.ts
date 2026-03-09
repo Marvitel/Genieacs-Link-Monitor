@@ -25,6 +25,7 @@ import {
   genieGetDeviceParameters,
   extractDeviceInfo,
   extractLiveDeviceInfo,
+  calculateGponSerial,
   isGenieACSConfigured,
   genieCheckConnectivity,
   genieClearDeviceFaults,
@@ -1556,6 +1557,11 @@ export async function registerRoutes(
             uptime: uptimeStr || existing.uptime,
           };
 
+          if (!existing.gponSerial && info.wanMacAddress) {
+            const calculatedGpon = calculateGponSerial(info.manufacturer, info.wanMacAddress);
+            if (calculatedGpon) updates.gponSerial = calculatedGpon;
+          }
+
           if (isOnline) {
             const mergedInfo = {
               ssid: (info.ssid || existing.ssid) ?? undefined,
@@ -1615,6 +1621,11 @@ export async function registerRoutes(
             lastSeen: info.lastInform ? new Date(info.lastInform) : null,
             uptime: uptimeStr,
           };
+
+          if (info.wanMacAddress) {
+            const calculatedGpon = calculateGponSerial(info.manufacturer, info.wanMacAddress);
+            if (calculatedGpon) newDeviceData.gponSerial = calculatedGpon;
+          }
 
           if (isOnline) {
             const initialBackup = buildBackupFromBasicInfo({

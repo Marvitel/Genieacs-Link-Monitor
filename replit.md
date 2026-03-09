@@ -19,7 +19,7 @@ NetControl ACS utilizes a modern web stack.
 - **Device Configuration Management**: Features include config backup, restore, and auto-restore after factory reset. This is achieved by storing device configurations and applying them via TR-069 setParameterValues tasks.
 - **ONT Migration/Replacement**: The system supports migrating configurations from an old ONT to a new one, streamlining device replacements.
 - **Supported Devices**: The system is designed to support a wide array of devices including ONT/ONU, Router, Mesh, Switch, and OLT from manufacturers like Huawei, ZTE, Fiberhome, MikroTik, Ruijie, TP-Link, Intelbras, Parks, and Datacom.
-- **GPON Serial**: Devices have a `gpon_serial` field auto-calculated from MAC address (e.g., TPLG + last 8 hex of MAC for TP-Link). This allows searching by the GPON serial used in OLT provisioning (e.g., TPLG6262E3E0) even though the ACS uses a different TR-069 serial (e.g., V255025002707). The field is editable manually for cases where auto-calculation doesn't match.
+- **GPON Serial**: Auto-calculated from the WAN PPPoE MAC address during sync. For TP-Link: `TPLG` (54504C47 hex) + MAC bytes [2][3][4][0]. Example: WAN MAC `E0:D3:62:62:E3:E3` → GPON SN `54504C476262E3E0`. The WAN MAC is read from `InternetGatewayDevice.WANDevice.1.WANConnectionDevice.{1-10}.WANPPPConnection.1.MACAddress`. Field is editable manually if auto-calculation doesn't match. Only calculated if `gponSerial` is empty (preserves manual entries).
 - **ONT↔Mesh Auto-Linking**: Devices are auto-linked by SSID matching (mesh extensor models like EX520/EX141 linked to parent ONTs like XX530v). Known mesh models (EX520, EX141, EX220, AP820, AX1800, AX1800V, 121AC) are auto-reclassified from `ont` to `mesh` during auto-link.
 
 ## Deployment
