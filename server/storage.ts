@@ -1,13 +1,13 @@
-import { eq, desc, or, ilike } from "drizzle-orm";
+import { eq, desc, or, ilike, gte } from "drizzle-orm";
 import { db } from "./db";
 import {
-  users, clients, devices, deviceLogs, configPresets, systemSettings, apiKeys,
+  users, clients, devices, deviceLogs, configPresets, systemSettings, apiKeys, networkSnapshots,
   type User, type InsertUser,
   type Client, type InsertClient,
   type Device, type InsertDevice,
   type DeviceLog, type InsertDeviceLog,
   type ConfigPreset, type InsertConfigPreset,
-  type SystemSetting, type ApiKey,
+  type SystemSetting, type ApiKey, type NetworkSnapshot,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -53,6 +53,9 @@ export interface IStorage {
   createApiKey(data: { name: string; keyHash: string; keyPrefix: string; permissions: string; createdBy?: string }): Promise<ApiKey>;
   deleteApiKey(id: string): Promise<void>;
   updateApiKeyLastUsed(id: string): Promise<void>;
+
+  createNetworkSnapshot(data: { onlineCount: number; offlineCount: number; warningCount: number; totalCount: number }): Promise<NetworkSnapshot>;
+  getNetworkSnapshots(since: Date): Promise<NetworkSnapshot[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -230,6 +233,17 @@ export class DatabaseStorage implements IStorage {
 
   async updateApiKeyLastUsed(id: string): Promise<void> {
     await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, id));
+  }
+
+  async createNetworkSnapshot(data: { onlineCount: number; offlineCount: number; warningCount: number; totalCount: number }): Promise<NetworkSnapshot> {
+    const [created] = await db.insert(networkSnapshots).values(data).returning();
+    return created;
+  }
+
+  async getNetworkSnapshots(since: Date): Promise<NetworkSnapshot[]> {
+    return db.select().from(networkSnapshots)
+      .where(gte(networkSnapshots.createdAt, since))
+      .orderBy(networkSnapshots.createdAt);
   }
 }
 

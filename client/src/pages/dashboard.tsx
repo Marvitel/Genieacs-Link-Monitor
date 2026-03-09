@@ -33,15 +33,7 @@ import {
 } from "recharts";
 import type { Device, Client, DeviceLog } from "@shared/schema";
 
-const uptimeData = [
-  { time: "00:00", online: 142, offline: 8 },
-  { time: "04:00", online: 140, offline: 10 },
-  { time: "08:00", online: 145, offline: 5 },
-  { time: "12:00", online: 148, offline: 2 },
-  { time: "16:00", online: 146, offline: 4 },
-  { time: "20:00", online: 144, offline: 6 },
-  { time: "Agora", online: 143, offline: 7 },
-];
+type UptimePoint = { time: string; online: number; offline: number };
 
 const COLORS = ["hsl(142, 76%, 36%)", "hsl(0, 84%, 60%)", "hsl(45, 93%, 47%)", "hsl(215, 20%, 65%)"];
 
@@ -56,6 +48,11 @@ export default function Dashboard() {
 
   const { data: logs, isLoading: logsLoading } = useQuery<DeviceLog[]>({
     queryKey: ["/api/device-logs"],
+  });
+
+  const { data: uptimeData } = useQuery<UptimePoint[]>({
+    queryKey: ["/api/network-availability"],
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const onlineCount = devices?.filter((d) => d.status === "online").length || 0;
@@ -147,7 +144,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={uptimeData}>
+                <AreaChart data={uptimeData || []}>
                   <defs>
                     <linearGradient id="onlineGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.3} />

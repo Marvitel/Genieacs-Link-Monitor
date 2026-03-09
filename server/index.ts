@@ -126,4 +126,25 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
     },
   );
+
+  const recordNetworkSnapshot = async () => {
+    try {
+      const { storage } = await import("./storage");
+      const allDevices = await storage.getDevices();
+      const online = allDevices.filter(d => d.status === "online").length;
+      const offline = allDevices.filter(d => d.status === "offline").length;
+      const warning = allDevices.filter(d => d.status === "warning").length;
+      await storage.createNetworkSnapshot({
+        onlineCount: online,
+        offlineCount: offline,
+        warningCount: warning,
+        totalCount: allDevices.length,
+      });
+    } catch (e) {
+      console.error("[Snapshot] Error recording network snapshot:", e);
+    }
+  };
+
+  setTimeout(recordNetworkSnapshot, 10000);
+  setInterval(recordNetworkSnapshot, 15 * 60 * 1000);
 })();

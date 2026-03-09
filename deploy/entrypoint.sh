@@ -22,11 +22,19 @@ pool.query(\`
     CONSTRAINT \"session_pkey\" PRIMARY KEY (\"sid\")
   );
   CREATE INDEX IF NOT EXISTS \"IDX_session_expire\" ON \"session\" (\"expire\");
+  CREATE TABLE IF NOT EXISTS \"network_snapshots\" (
+    \"id\" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+    \"online_count\" integer NOT NULL DEFAULT 0,
+    \"offline_count\" integer NOT NULL DEFAULT 0,
+    \"warning_count\" integer NOT NULL DEFAULT 0,
+    \"total_count\" integer NOT NULL DEFAULT 0,
+    \"created_at\" timestamp DEFAULT now()
+  );
 \`).then(() => {
-  console.log('Session table ready');
+  console.log('Session + network_snapshots tables ready');
   pool.end();
 }).catch(err => {
-  console.error('Session table error:', err.message);
+  console.error('Table creation error:', err.message);
   pool.end();
 });
 "

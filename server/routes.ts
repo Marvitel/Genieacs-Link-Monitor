@@ -1126,6 +1126,30 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/network-availability", async (req, res) => {
+    const hours = parseInt(req.query.hours as string) || 24;
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const snapshots = await storage.getNetworkSnapshots(since);
+
+    if (snapshots.length === 0) {
+      const allDevices = await storage.getDevices();
+      const online = allDevices.filter(d => d.status === "online").length;
+      const offline = allDevices.filter(d => d.status === "offline").length;
+      const warning = allDevices.filter(d => d.status === "warning").length;
+      const now = new Date();
+      const formatTime = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      return res.json([{ time: formatTime(now), online, offline: offline + warning }]);
+    }
+
+    const formatTime = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const data = snapshots.map(s => ({
+      time: formatTime(new Date(s.createdAt!)),
+      online: s.onlineCount,
+      offline: s.offlineCount + s.warningCount,
+    }));
+    res.json(data);
+  });
+
   app.get("/api/device-logs", async (req, res) => {
     const deviceId = req.query.deviceId as string | undefined;
     const logs = await storage.getDeviceLogs(deviceId);
@@ -1478,6 +1502,17 @@ export async function registerRoutes(
         }
         synced++;
       }
+      const updatedDevices = await storage.getDevices();
+      const snapOnline = updatedDevices.filter(d => d.status === "online").length;
+      const snapOffline = updatedDevices.filter(d => d.status === "offline").length;
+      const snapWarning = updatedDevices.filter(d => d.status === "warning").length;
+      await storage.createNetworkSnapshot({
+        onlineCount: snapOnline,
+        offlineCount: snapOffline,
+        warningCount: snapWarning,
+        totalCount: updatedDevices.length,
+      }).catch(() => {});
+
       res.json({
         message: `Sincronização concluída: ${synced} dispositivos processados, ${autoBackups} backups automáticos`,
         synced,

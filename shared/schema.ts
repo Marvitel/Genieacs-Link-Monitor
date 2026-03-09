@@ -163,6 +163,17 @@ export const insertConfigPresetSchema = createInsertSchema(configPresets).omit({
 export type InsertConfigPreset = z.infer<typeof insertConfigPresetSchema>;
 export type ConfigPreset = typeof configPresets.$inferSelect;
 
+export const networkSnapshots = pgTable("network_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  onlineCount: integer("online_count").notNull().default(0),
+  offlineCount: integer("offline_count").notNull().default(0),
+  warningCount: integer("warning_count").notNull().default(0),
+  totalCount: integer("total_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type NetworkSnapshot = typeof networkSnapshots.$inferSelect;
+
 export interface SavedDeviceConfig {
   wifi?: {
     ssid?: string;
