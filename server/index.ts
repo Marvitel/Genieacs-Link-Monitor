@@ -1,3 +1,5 @@
+process.env.TZ = "America/Sao_Paulo";
+
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";

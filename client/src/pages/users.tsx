@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Pencil, Trash2, UserCog, Shield, Eye, Settings2 } from "lucide-react";
+import { formatBRT } from "@/lib/date";
 
 interface UserItem {
   id: string;

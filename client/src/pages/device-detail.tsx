@@ -13,6 +13,7 @@ import { DeviceStatusBadge, DeviceTypeBadge } from "@/components/device-status-b
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { formatBRT } from "@/lib/date";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1195,7 +1196,7 @@ export default function DeviceDetail() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Restaurar Configuração</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Aplicar a configuração salva em {device.savedConfigAt ? new Date(device.savedConfigAt).toLocaleString("pt-BR") : "N/A"} ao dispositivo {device.serialNumber}?
+                    Aplicar a configuração salva em {device.savedConfigAt ? formatBRT(device.savedConfigAt) : "N/A"} ao dispositivo {device.serialNumber}?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
