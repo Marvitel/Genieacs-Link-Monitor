@@ -261,18 +261,27 @@ export async function genieClearAllFaults(code?: string): Promise<number> {
   return deleted;
 }
 
+async function isDeviceTR181(deviceId: string): Promise<boolean> {
+  const device = await genieGetDevice(deviceId);
+  if (!device) return false;
+  const pc = device._deviceId?._ProductClass ?? "";
+  const mfr = device._deviceId?._Manufacturer ?? "";
+  return (pc === "Device2" || pc.indexOf("XX530") >= 0 || pc.indexOf("XX230") >= 0 || pc.indexOf("EX520") >= 0 || pc.indexOf("EX141") >= 0 || pc.indexOf("XC220") >= 0 || mfr.indexOf("MikroTik") >= 0);
+}
+
 export async function genieRunDiagnostic(
   deviceId: string,
   diagnosticType: "ping" | "traceroute" | "download" | "upload",
   host: string,
   connections?: number
 ): Promise<boolean> {
+  const tr181 = await isDeviceTR181(deviceId);
   let parameterPath: string;
   const parameters: Array<[string, string | number | boolean]> = [];
 
   switch (diagnosticType) {
     case "ping":
-      parameterPath = "InternetGatewayDevice.IPPingDiagnostics";
+      parameterPath = tr181 ? "Device.IP.Diagnostics.IPPing" : "InternetGatewayDevice.IPPingDiagnostics";
       parameters.push(
         [`${parameterPath}.Host`, host],
         [`${parameterPath}.NumberOfRepetitions`, 4],
@@ -282,7 +291,7 @@ export async function genieRunDiagnostic(
       );
       break;
     case "traceroute":
-      parameterPath = "InternetGatewayDevice.TraceRouteDiagnostics";
+      parameterPath = tr181 ? "Device.IP.Diagnostics.TraceRoute" : "InternetGatewayDevice.TraceRouteDiagnostics";
       parameters.push(
         [`${parameterPath}.Host`, host],
         [`${parameterPath}.MaxHopCount`, 30],
@@ -292,7 +301,7 @@ export async function genieRunDiagnostic(
       );
       break;
     case "download":
-      parameterPath = "InternetGatewayDevice.DownloadDiagnostics";
+      parameterPath = tr181 ? "Device.IP.Diagnostics.DownloadDiagnostics" : "InternetGatewayDevice.DownloadDiagnostics";
       parameters.push(
         [`${parameterPath}.DownloadURL`, host],
         [`${parameterPath}.NumberOfConnections`, connections || 1],
@@ -300,7 +309,7 @@ export async function genieRunDiagnostic(
       );
       break;
     case "upload":
-      parameterPath = "InternetGatewayDevice.UploadDiagnostics";
+      parameterPath = tr181 ? "Device.IP.Diagnostics.UploadDiagnostics" : "InternetGatewayDevice.UploadDiagnostics";
       parameters.push(
         [`${parameterPath}.UploadURL`, host],
         [`${parameterPath}.NumberOfConnections`, connections || 1],
@@ -356,12 +365,20 @@ export async function genieGetDiagnosticResult(
   deviceId: string,
   diagnosticType: "ping" | "traceroute" | "download" | "upload"
 ): Promise<Record<string, unknown> | null> {
-  const pathMap: Record<string, string> = {
-    ping: "InternetGatewayDevice.IPPingDiagnostics",
-    traceroute: "InternetGatewayDevice.TraceRouteDiagnostics",
-    download: "InternetGatewayDevice.DownloadDiagnostics",
-    upload: "InternetGatewayDevice.UploadDiagnostics",
-  };
+  const tr181 = await isDeviceTR181(deviceId);
+  const pathMap: Record<string, string> = tr181
+    ? {
+        ping: "Device.IP.Diagnostics.IPPing",
+        traceroute: "Device.IP.Diagnostics.TraceRoute",
+        download: "Device.IP.Diagnostics.DownloadDiagnostics",
+        upload: "Device.IP.Diagnostics.UploadDiagnostics",
+      }
+    : {
+        ping: "InternetGatewayDevice.IPPingDiagnostics",
+        traceroute: "InternetGatewayDevice.TraceRouteDiagnostics",
+        download: "InternetGatewayDevice.DownloadDiagnostics",
+        upload: "InternetGatewayDevice.UploadDiagnostics",
+      };
   const path = pathMap[diagnosticType];
   if (!path) return null;
 

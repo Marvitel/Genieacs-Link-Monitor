@@ -1009,9 +1009,10 @@ export async function registerRoutes(
 
     try {
       const parameters: Array<[string, string | number | boolean]> = [];
-      const isTR181 = device.model === "Device2" || device.model?.includes("XX530") || device.model?.includes("XX230") || device.model?.includes("EX520") || device.model?.includes("EX141") || device.model?.includes("XC220");
+      const isTR181 = device.model === "Device2" || device.model?.includes("XX530") || device.model?.includes("XX230") || device.model?.includes("EX520") || device.model?.includes("EX141") || device.model?.includes("XC220") || device.manufacturer?.includes("MikroTik");
+      const isMikroTik = device.manufacturer?.includes("MikroTik");
 
-      if (config.wifi) {
+      if (config.wifi && !isMikroTik) {
         if (isTR181) {
           if (config.wifi.ssid) parameters.push(["Device.WiFi.SSID.2.SSID", config.wifi.ssid]);
           if (config.wifi.password) parameters.push(["Device.WiFi.AccessPoint.2.Security.KeyPassphrase", config.wifi.password]);
@@ -1179,9 +1180,10 @@ export async function registerRoutes(
       if (config && Object.keys(config).length > 0 && newDevice.genieId) {
         try {
           const parameters: Array<[string, string | number | boolean]> = [];
-          const isTR181 = newDevice.model === "Device2" || newDevice.model?.includes("XX530") || newDevice.model?.includes("XX230") || newDevice.model?.includes("EX520") || newDevice.model?.includes("EX141") || newDevice.model?.includes("XC220");
+          const isTR181 = newDevice.model === "Device2" || newDevice.model?.includes("XX530") || newDevice.model?.includes("XX230") || newDevice.model?.includes("EX520") || newDevice.model?.includes("EX141") || newDevice.model?.includes("XC220") || newDevice.manufacturer?.includes("MikroTik");
+          const isMikroTikBatch = newDevice.manufacturer?.includes("MikroTik");
 
-          if (config.wifi) {
+          if (config.wifi && !isMikroTikBatch) {
             if (isTR181) {
               if (config.wifi.ssid) parameters.push(["Device.WiFi.SSID.2.SSID", config.wifi.ssid]);
               if (config.wifi.password) parameters.push(["Device.WiFi.AccessPoint.2.Security.KeyPassphrase", config.wifi.password]);
