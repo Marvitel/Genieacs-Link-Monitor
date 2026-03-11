@@ -179,7 +179,7 @@ export default function Diagnostics() {
                       </div>
                       <p className="text-sm">{log.message}</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {log.createdAt ? new Date(log.createdAt).toLocaleString("pt-BR") : ""}
+                        {formatBRT(log.createdAt)}
                       </p>
                     </div>
                   </div>

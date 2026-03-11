@@ -574,7 +574,7 @@ export default function Settings() {
                         <Badge variant="outline" className="text-[10px]">{permLabels[k.permissions] || k.permissions}</Badge>
                         {k.lastUsedAt && (
                           <span className="text-[10px] text-muted-foreground">
-                            Usado: {new Date(k.lastUsedAt).toLocaleDateString("pt-BR")}
+                            Usado: {formatBRT(k.lastUsedAt, "date")}
                           </span>
                         )}
                         <Button

@@ -147,6 +147,111 @@ app.use((req, res, next) => {
     }
   };
 
+  const autoSyncGenieDevices = async () => {
+    try {
+      const { storage } = await import("./storage");
+      const { genieGetDevices, extractDeviceInfo, calculateGponSerial } = await import("./genieacs");
+
+      const genieDevices = await genieGetDevices();
+      const allDevices = await storage.getDevices();
+      let synced = 0;
+
+      for (const gDevice of genieDevices) {
+        const info = extractDeviceInfo(gDevice);
+        if (!info.serialNumber) continue;
+
+        const existing = allDevices.find(d => d.serialNumber === info.serialNumber);
+        const isOnline = info.lastInform && (Date.now() - new Date(info.lastInform).getTime()) < 600000;
+        const uptimeStr = info.uptime ? `${Math.floor(Number(info.uptime) / 86400)}d ${Math.floor((Number(info.uptime) % 86400) / 3600)}h` : null;
+
+        if (existing) {
+          const updates: Record<string, unknown> = {
+            genieId: info.genieId,
+            status: isOnline ? "online" : "offline",
+            firmwareVersion: info.firmwareVersion || existing.firmwareVersion,
+            hardwareVersion: info.hardwareVersion || existing.hardwareVersion,
+            ipAddress: info.ipAddress || existing.ipAddress,
+            macAddress: info.macAddress || existing.macAddress,
+            rxPower: info.rxPower !== null ? info.rxPower : existing.rxPower,
+            txPower: info.txPower !== null ? info.txPower : existing.txPower,
+            temperature: info.temperature !== null ? info.temperature : existing.temperature,
+            voltage: info.voltage !== null ? info.voltage : existing.voltage,
+            ssid: info.ssid || existing.ssid,
+            ssid5g: info.ssid5g || existing.ssid5g,
+            wifiChannel: info.wifiChannel || existing.wifiChannel,
+            wifiChannel5g: info.wifiChannel5g || existing.wifiChannel5g,
+            pppoeUser: info.pppoeUser || existing.pppoeUser,
+            connectionType: info.connectionType || existing.connectionType,
+            lastSeen: info.lastInform ? new Date(info.lastInform) : existing.lastSeen,
+            uptime: uptimeStr || existing.uptime,
+          };
+
+          if (!existing.gponSerial && info.wanMacAddress) {
+            const calculatedGpon = calculateGponSerial(info.manufacturer, info.wanMacAddress);
+            if (calculatedGpon) updates.gponSerial = calculatedGpon;
+          }
+
+          await storage.updateDevice(existing.id, updates);
+        } else {
+          let deviceType: string = "ont";
+          const mfr = info.manufacturer.toLowerCase();
+          if (mfr.includes("mikrotik")) deviceType = "router";
+          else if (mfr.includes("ruijie")) deviceType = "mesh";
+
+          const newDeviceData: Record<string, unknown> = {
+            genieId: info.genieId,
+            serialNumber: info.serialNumber,
+            model: info.model || "Unknown",
+            manufacturer: info.manufacturer || "Unknown",
+            deviceType,
+            macAddress: info.macAddress || null,
+            ipAddress: info.ipAddress || null,
+            status: isOnline ? "online" : "offline",
+            firmwareVersion: info.firmwareVersion || null,
+            hardwareVersion: info.hardwareVersion || null,
+            ssid: info.ssid || null,
+            ssid5g: info.ssid5g || null,
+            wifiChannel: info.wifiChannel || null,
+            wifiChannel5g: info.wifiChannel5g || null,
+            pppoeUser: info.pppoeUser || null,
+            connectionType: info.connectionType || null,
+            rxPower: info.rxPower,
+            txPower: info.txPower,
+            temperature: info.temperature,
+            voltage: info.voltage,
+            lastSeen: info.lastInform ? new Date(info.lastInform) : null,
+            uptime: uptimeStr,
+          };
+
+          if (info.wanMacAddress) {
+            const calculatedGpon = calculateGponSerial(info.manufacturer, info.wanMacAddress);
+            if (calculatedGpon) newDeviceData.gponSerial = calculatedGpon;
+          }
+
+          await storage.createDevice(newDeviceData as Parameters<typeof storage.createDevice>[0]);
+        }
+        synced++;
+      }
+
+      const updatedDevices = await storage.getDevices();
+      const snapOnline = updatedDevices.filter(d => d.status === "online").length;
+      const snapOffline = updatedDevices.filter(d => d.status === "offline").length;
+      const snapWarning = updatedDevices.filter(d => d.status === "warning").length;
+      await storage.createNetworkSnapshot({
+        onlineCount: snapOnline,
+        offlineCount: snapOffline,
+        warningCount: snapWarning,
+        totalCount: updatedDevices.length,
+      }).catch(() => {});
+
+      console.log(`[AutoSync] ${synced} dispositivos sincronizados, total: ${updatedDevices.length}`);
+    } catch (e) {
+      console.error("[AutoSync] Error syncing GenieACS devices:", e);
+    }
+  };
+
   setTimeout(recordNetworkSnapshot, 10000);
+  setTimeout(autoSyncGenieDevices, 15000);
   setInterval(recordNetworkSnapshot, 15 * 60 * 1000);
+  setInterval(autoSyncGenieDevices, 15 * 60 * 1000);
 })();

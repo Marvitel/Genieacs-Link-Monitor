@@ -300,7 +300,7 @@ export default function Dashboard() {
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <span className="text-sm truncate">{log.message}</span>
                       <span className="text-xs text-muted-foreground">
-                        {log.createdAt ? new Date(log.createdAt).toLocaleString("pt-BR") : ""}
+                        {formatBRT(log.createdAt)}
                       </span>
                     </div>
                   </div>

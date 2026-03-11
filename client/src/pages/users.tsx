@@ -134,7 +134,7 @@ export default function Users() {
                       {roleLabels[u.role] || u.role}
                     </Badge>
                     <span className="text-[10px] text-muted-foreground">
-                      {u.lastLoginAt ? `Último login: ${new Date(u.lastLoginAt).toLocaleDateString("pt-BR")}` : "Nunca logou"}
+                      {u.lastLoginAt ? `Último login: ${formatBRT(u.lastLoginAt, "date")}` : "Nunca logou"}
                     </span>
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(u)} data-testid={`button-edit-user-${u.id}`}>
                       <Pencil className="w-3 h-3" />

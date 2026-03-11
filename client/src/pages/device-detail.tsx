@@ -1325,8 +1325,8 @@ export default function DeviceDetail() {
                     <InfoRow label="Firmware" value={liveInfo?.firmwareVersion || device.firmwareVersion} />
                     <InfoRow label="Hardware" value={liveInfo?.hardwareVersion || device.hardwareVersion} />
                     <InfoRow label="Uptime" value={uptime > 0 ? formatUptime(uptime) : device.uptime} icon={Clock} />
-                    <InfoRow label="Último Inform" value={liveInfo?.lastInform ? new Date(liveInfo.lastInform).toLocaleString("pt-BR") : device.lastSeen ? new Date(device.lastSeen).toLocaleString("pt-BR") : null} />
-                    <InfoRow label="Último Boot" value={liveInfo?.lastBoot ? new Date(liveInfo.lastBoot).toLocaleString("pt-BR") : null} />
+                    <InfoRow label="Último Inform" value={liveInfo?.lastInform ? formatBRT(liveInfo.lastInform) : device.lastSeen ? formatBRT(device.lastSeen) : null} />
+                    <InfoRow label="Último Boot" value={liveInfo?.lastBoot ? formatBRT(liveInfo.lastBoot) : null} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1976,7 +1976,7 @@ export default function DeviceDetail() {
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className="text-[10px]">{log.eventType}</Badge>
                               <span className="text-xs text-muted-foreground">
-                                {log.createdAt ? new Date(log.createdAt).toLocaleString("pt-BR") : ""}
+                                {formatBRT(log.createdAt)}
                               </span>
                             </div>
                             <span className="text-sm">{log.message}</span>
@@ -2102,7 +2102,7 @@ export default function DeviceDetail() {
             <CardContent className="text-xs space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Último backup</span>
-                <span className="font-medium">{device.savedConfigAt ? new Date(device.savedConfigAt).toLocaleString("pt-BR") : "N/A"}</span>
+                <span className="font-medium">{device.savedConfigAt ? formatBRT(device.savedConfigAt) : "N/A"}</span>
               </div>
               <div className="flex items-center gap-2 flex-wrap mt-1">
                 {(device.savedConfig as SavedDeviceConfig)?.wifi && <Badge variant="secondary" className="text-[10px]" data-testid="badge-backup-wifi">WiFi</Badge>}
