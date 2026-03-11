@@ -1588,6 +1588,10 @@ export async function registerRoutes(
             uptime: uptimeStr || existing.uptime,
           };
 
+          if (existing.deviceType === "ont" && !existing.pppoeUser && isMeshModel(info.model || existing.model)) {
+            updates.deviceType = "mesh";
+          }
+
           if (!existing.gponSerial && info.wanMacAddress) {
             const calculatedGpon = calculateGponSerial(info.manufacturer, info.wanMacAddress);
             if (calculatedGpon) updates.gponSerial = calculatedGpon;
@@ -1625,6 +1629,7 @@ export async function registerRoutes(
           const mfr = info.manufacturer.toLowerCase();
           if (mfr.includes("mikrotik")) deviceType = "router";
           else if (mfr.includes("ruijie")) deviceType = "mesh";
+          else if (isMeshModel(info.model || "")) deviceType = "mesh";
 
           const newDeviceData: Record<string, unknown> = {
             genieId: info.genieId,
