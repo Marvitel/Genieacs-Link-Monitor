@@ -390,7 +390,7 @@ export async function registerRoutes(
     res.json({ parent: parent || null, children });
   });
 
-  const MESH_MODELS = ["EX520", "EX220", "EX141", "EX230", "AP820", "AX1800", "AX1800V", "121AC", "EX220V2"];
+  const MESH_MODELS = ["EX520", "EX220", "EX141", "EX230", "AP820", "EX220V2"];
 
   function isMeshModel(model: string): boolean {
     return MESH_MODELS.some(m => model.toUpperCase().includes(m.toUpperCase()));
