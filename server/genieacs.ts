@@ -713,6 +713,33 @@ export function extractDeviceInfo(device: GenieACSDevice) {
   const ctComTemp = getVal(device, `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.TransceiverTemperature`) as number | null;
   const ctComVolt = getVal(device, `${igd}.WANDevice.1.X_CT-COM_GponInterfaceConfig.SupplyVottage`) as number | null;
 
+  let mkSfpRx: number | null = null;
+  let mkSfpTx: number | null = null;
+  let mkSfpTemp: number | null = null;
+  let mkSfpVolt: number | null = null;
+  if (manufacturer.indexOf("MikroTik") >= 0) {
+    for (let ei = 1; ei <= 10; ei++) {
+      const sfpRx = getVal(device, `${dev}.Ethernet.Interface.${ei}.X_MIKROTIK_SFPRxPower`) as number | null;
+      if (sfpRx !== null) {
+        mkSfpRx = sfpRx;
+        mkSfpTx = getVal(device, `${dev}.Ethernet.Interface.${ei}.X_MIKROTIK_SFPTxPower`) as number | null;
+        mkSfpTemp = getVal(device, `${dev}.Ethernet.Interface.${ei}.X_MIKROTIK_SFPTemperature`) as number | null;
+        mkSfpVolt = getVal(device, `${dev}.Ethernet.Interface.${ei}.X_MIKROTIK_SFPSupplyVoltage`) as number | null;
+        break;
+      }
+    }
+    if (mkSfpRx === null) {
+      for (let oi = 1; oi <= 4; oi++) {
+        const optRx = getVal(device, `${dev}.Optical.Interface.${oi}.OpticalSignalLevel`) as number | null;
+        if (optRx !== null) {
+          mkSfpRx = optRx;
+          mkSfpTx = getVal(device, `${dev}.Optical.Interface.${oi}.TransmitOpticalLevel`) as number | null;
+          break;
+        }
+      }
+    }
+  }
+
   let finalRx = rxPower;
   let finalTx = txPower;
   let finalTemp = temperature;
@@ -742,6 +769,19 @@ export function extractDeviceInfo(device: GenieACSDevice) {
   }
   if (finalVolt === null && ctComVolt !== null && ctComVolt > 0) {
     finalVolt = Math.round((ctComVolt / 10000) * 10000) / 10000;
+  }
+
+  if (finalRx === null && mkSfpRx !== null) {
+    finalRx = mkSfpRx;
+  }
+  if (finalTx === null && mkSfpTx !== null) {
+    finalTx = mkSfpTx;
+  }
+  if (finalTemp === null && mkSfpTemp !== null) {
+    finalTemp = mkSfpTemp;
+  }
+  if (finalVolt === null && mkSfpVolt !== null) {
+    finalVolt = mkSfpVolt;
   }
 
   const connectionType = pppoeUser ? "PPPoE" : (ipAddress ? "DHCP" : "");
