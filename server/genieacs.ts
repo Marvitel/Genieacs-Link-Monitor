@@ -1111,6 +1111,7 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
     scanHostRange(`${dev}.Hosts.Host`, true);
   }
 
+  const isMikroTik = manufacturer.indexOf("MikroTik") >= 0;
   const ethernetPorts: EthernetPort[] = [];
   for (let i = 1; i <= 8; i++) {
     const ethBase = `${igd}.LANDevice.1.LANEthernetInterfaceConfig.${i}`;
@@ -1121,13 +1122,23 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
       const base = status ? ethBase : ethBase2;
       const s = (status || status2) as string;
       const statsBase = `${base}.Stats`;
+      let portName = (getVal(device, `${base}.Name`) as string) || "";
+      if (isMikroTik && !portName) {
+        const model = (getVal(device, `${dev}.DeviceInfo.ModelName`) as string) || "";
+        const totalPorts = ethernetPorts.length + 1;
+        if (model.includes("760") || model.includes("hEX")) {
+          portName = i <= 5 ? `ether${i}` : `sfp1`;
+        } else {
+          portName = `ether${i}`;
+        }
+      }
       ethernetPorts.push({
         index: i,
         status: s,
         macAddress: (getVal(device, `${base}.MACAddress`) as string) || "",
         speed: String(getVal(device, `${base}.MaxBitRate`) || getVal(device, `${base}.CurrentBitRate`) || ""),
         duplex: (getVal(device, `${base}.DuplexMode`) as string) || "",
-        name: (getVal(device, `${base}.Name`) as string) || "",
+        name: portName,
         txBytes: (getVal(device, `${statsBase}.BytesSent`) as number) || 0,
         rxBytes: (getVal(device, `${statsBase}.BytesReceived`) as number) || 0,
         txErrors: (getVal(device, `${statsBase}.ErrorsSent`) as number) || 0,

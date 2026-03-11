@@ -1337,6 +1337,20 @@ export default function DeviceDetail() {
                     <CardTitle className="text-sm font-medium flex items-center gap-1"><Signal className="w-4 h-4 text-primary" /> Sinal Óptico</CardTitle>
                   </CardHeader>
                   <CardContent>
+                    {device.manufacturer === "MikroTik" && rxPower === null && txPower === null ? (
+                      <div className="p-4 rounded-lg bg-muted/50 text-center space-y-2">
+                        <Cable className="w-8 h-8 mx-auto text-muted-foreground" />
+                        <p className="text-sm font-medium">Roteador MikroTik</p>
+                        <p className="text-xs text-muted-foreground">
+                          {ethernetPorts.some(p => p.name?.toLowerCase().includes("sfp") && (p.status === "Up" || p.status === "1"))
+                            ? "Módulo SFP detectado. Dados de sinal óptico não disponíveis via TR-069 no RouterOS."
+                            : ethernetPorts.some(p => p.name?.toLowerCase().includes("sfp"))
+                              ? "Porta SFP sem módulo instalado. Insira um módulo SFP para obter dados de sinal."
+                              : "Este modelo não possui interface GPON/PON. Dados de sinal óptico não se aplicam."
+                          }
+                        </p>
+                      </div>
+                    ) : (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-4 rounded-lg bg-muted/50 text-center">
                         <p className="text-xs text-muted-foreground mb-1">RX Power</p>
@@ -1362,6 +1376,7 @@ export default function DeviceDetail() {
                         <p className="text-xs text-muted-foreground">V</p>
                       </div>
                     </div>
+                    )}
                     {liveLoading && (
                       <div className="flex items-center gap-2 mt-3 text-muted-foreground">
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -1378,14 +1393,19 @@ export default function DeviceDetail() {
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {ethernetPorts.map((port) => (
-                          <div key={port.index} className={`p-3 rounded-lg text-center border ${port.status === "Up" || port.status === "1" ? "border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20" : "border-border bg-muted/30"}`} data-testid={`eth-port-${port.index}`}>
-                            <Plug className={`w-5 h-5 mx-auto mb-1 ${port.status === "Up" || port.status === "1" ? "text-emerald-500" : "text-muted-foreground"}`} />
-                            <p className="text-xs font-medium">ETH {port.index}</p>
-                            <p className="text-[10px] text-muted-foreground">{port.status === "Up" || port.status === "1" ? "Conectada" : "Desconectada"}</p>
-                            {port.speed && <p className="text-[10px] text-muted-foreground">{port.speed} Mbps</p>}
+                        {ethernetPorts.map((port) => {
+                          const isUp = port.status === "Up" || port.status === "1";
+                          const isSfp = port.name?.toLowerCase().includes("sfp");
+                          const speedNum = parseInt(port.speed);
+                          return (
+                          <div key={port.index} className={`p-3 rounded-lg text-center border ${isUp ? "border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20" : "border-border bg-muted/30"}`} data-testid={`eth-port-${port.index}`}>
+                            <Plug className={`w-5 h-5 mx-auto mb-1 ${isUp ? "text-emerald-500" : "text-muted-foreground"}`} />
+                            <p className="text-xs font-medium">{port.name || `ETH ${port.index}`}</p>
+                            <p className="text-[10px] text-muted-foreground">{isUp ? "Conectada" : isSfp ? "SFP vazio" : "Desconectada"}</p>
+                            {isUp && speedNum > 0 && <p className="text-[10px] text-muted-foreground">{speedNum >= 1000 ? "1 Gbps" : `${speedNum} Mbps`}</p>}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>
@@ -1585,7 +1605,7 @@ export default function DeviceDetail() {
                               }`}
                             >
                               <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-bold">ETH {port.index}</span>
+                                <span className="text-xs font-bold">{port.name || `ETH ${port.index}`}</span>
                                 <div className={`w-2.5 h-2.5 rounded-full ${isUp ? hasErrors ? "bg-red-500 animate-pulse" : "bg-green-500" : "bg-muted-foreground/30"}`} />
                               </div>
                               <div className="space-y-1">
@@ -1595,6 +1615,14 @@ export default function DeviceDetail() {
                                     {isUp ? "Up" : "NoLink"}
                                   </Badge>
                                 </div>
+                                {port.name?.toLowerCase().includes("sfp") && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-muted-foreground">Tipo</span>
+                                    <Badge variant="outline" className={`text-[10px] ${isUp ? "border-blue-500/50 text-blue-400" : "border-muted text-muted-foreground"}`}>
+                                      SFP {isUp ? "" : "(vazio)"}
+                                    </Badge>
+                                  </div>
+                                )}
                                 {isUp && speedNum > 0 && (
                                   <div className="flex items-center justify-between">
                                     <span className="text-[10px] text-muted-foreground">Velocidade</span>
