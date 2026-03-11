@@ -1111,6 +1111,7 @@ export function extractLiveDeviceInfo(device: GenieACSDevice): DeviceLiveInfo {
     scanHostRange(`${dev}.Hosts.Host`, true);
   }
 
+  const manufacturer = device._deviceId?._Manufacturer ?? "";
   const isMikroTik = manufacturer.indexOf("MikroTik") >= 0;
   const ethernetPorts: EthernetPort[] = [];
   for (let i = 1; i <= 8; i++) {
