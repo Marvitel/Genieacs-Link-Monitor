@@ -786,6 +786,10 @@ export function extractDeviceInfo(device: GenieACSDevice) {
 
   const connectionType = pppoeUser ? "PPPoE" : (ipAddress ? "DHCP" : "");
 
+  // GatewayInfo: exposed by TP-Link mesh extenders — identifies parent ONT/router
+  const gatewaySerial = (getVal(device, "Device.GatewayInfo.SerialNumber") as string) || null;
+  const gatewayProductClass = (getVal(device, "Device.GatewayInfo.ProductClass") as string) || null;
+
   function convertPonPower(val: number | null): number | null {
     if (val === null) return null;
     if (typeof val === 'number' && val > 10) {
@@ -827,6 +831,8 @@ export function extractDeviceInfo(device: GenieACSDevice) {
     txPower: convertPonPower(finalTx),
     temperature: finalTemp !== null ? (typeof finalTemp === 'number' && finalTemp > 1000 ? finalTemp / 256 : finalTemp) : null,
     voltage: convertVoltage(finalVolt),
+    gatewaySerial,
+    gatewayProductClass,
   };
 }
 

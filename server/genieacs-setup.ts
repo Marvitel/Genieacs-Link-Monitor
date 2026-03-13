@@ -99,6 +99,9 @@ if (!isTR181) {
   declare("Device.DeviceInfo.Manufacturer", {value: now});
   declare("Device.DeviceInfo.ModelName", {value: now});
   declare("Device.DeviceInfo.SerialNumber", {value: now});
+  declare("Device.GatewayInfo.SerialNumber", {value: now});
+  declare("Device.GatewayInfo.ProductClass", {value: now});
+  declare("Device.GatewayInfo.ManufacturerOUI", {value: now});
 }
 `,
 

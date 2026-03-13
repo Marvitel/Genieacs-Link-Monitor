@@ -1552,7 +1552,9 @@ export async function registerRoutes(
       const genieDevices = await genieGetDevices();
       let synced = 0;
       let autoBackups = 0;
+      let gatewayLinked = 0;
       const allDevices = await storage.getDevices();
+      const serialToDevice = new Map(allDevices.map(d => [d.serialNumber, d]));
       for (const gDevice of genieDevices) {
         const info = extractDeviceInfo(gDevice);
         if (!info.serialNumber) continue;
@@ -1590,6 +1592,15 @@ export async function registerRoutes(
 
           if (existing.deviceType === "ont" && !existing.pppoeUser && isMeshModel(info.model || existing.model)) {
             updates.deviceType = "mesh";
+          }
+
+          // Auto-link mesh to parent ONT via Device.GatewayInfo.SerialNumber
+          if (info.gatewaySerial && !existing.parentDeviceId) {
+            const parentDevice = serialToDevice.get(info.gatewaySerial);
+            if (parentDevice && parentDevice.id !== existing.id) {
+              updates.parentDeviceId = parentDevice.id;
+              gatewayLinked++;
+            }
           }
 
           if (!existing.gponSerial && info.wanMacAddress) {
@@ -1663,6 +1674,14 @@ export async function registerRoutes(
             if (calculatedGpon) newDeviceData.gponSerial = calculatedGpon;
           }
 
+          if (info.gatewaySerial) {
+            const parentDevice = serialToDevice.get(info.gatewaySerial);
+            if (parentDevice) {
+              newDeviceData.parentDeviceId = parentDevice.id;
+              gatewayLinked++;
+            }
+          }
+
           if (isOnline) {
             const initialBackup = buildBackupFromBasicInfo({
               ssid: info.ssid || undefined,
@@ -1696,9 +1715,10 @@ export async function registerRoutes(
       }).catch(() => {});
 
       res.json({
-        message: `Sincronização concluída: ${synced} dispositivos processados, ${autoBackups} backups automáticos`,
+        message: `Sincronização concluída: ${synced} dispositivos processados, ${autoBackups} backups automáticos, ${gatewayLinked} mesh vinculados por gateway`,
         synced,
         autoBackups,
+        gatewayLinked,
       });
     } catch (error) {
       handleGenieError(error, res);
