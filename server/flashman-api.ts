@@ -32,13 +32,32 @@ function safeStr(val: any, fallback: string = ""): string {
   return String(val);
 }
 
-function deviceToFlashmanFormat(device: Device, liveData?: any): any {
+interface MeshContext {
+  parent?: Device | null;
+  slaves?: Device[];
+}
+
+function deviceToFlashmanFormat(device: Device, liveData?: any, meshCtx?: MeshContext): any {
   const cfg = device.savedConfig as SavedDeviceConfig | null;
   const lastContact = device.lastSeen ? new Date(device.lastSeen).toISOString() : new Date(0).toISOString();
   const isOnline = device.status === "online";
 
   const wifiChannel2g = safeNum(liveData?.wifiChannel || cfg?.wifi?.channel || device.wifiChannel, 0);
   const wifiChannel5g = safeNum(liveData?.wifiChannel5g || cfg?.wifi?.channel5g || device.wifiChannel5g, 0);
+
+  // mesh_mode: 0 = standalone, 2 = slave/extender (has parent), 1 = master (has slaves)
+  const slaves = meshCtx?.slaves || [];
+  const parent = meshCtx?.parent || null;
+  const meshMode = parent ? 2 : slaves.length > 0 ? 1 : 0;
+  const meshMaster = parent ? (parent.macAddress || parent.serialNumber || "") : "";
+  const meshSlaves = slaves.map(s => ({
+    mac: s.macAddress || s.serialNumber || "",
+    serial: s.serialNumber || "",
+    model: s.model || "",
+    status: s.status || "offline",
+    ip: s.ipAddress || "",
+    last_contact: s.lastSeen ? new Date(s.lastSeen).toISOString() : new Date(0).toISOString(),
+  }));
 
   const result: any = {
     _id: device.macAddress || device.serialNumber || "",
@@ -80,9 +99,9 @@ function deviceToFlashmanFormat(device: Device, liveData?: any): any {
     pon_rxpower: safeNum(liveData?.rxPower ?? device.rxPower, 0),
     pon_txpower: safeNum(liveData?.txPower ?? device.txPower, 0),
     pon_signal_measure: "dBm",
-    mesh_mode: 0,
-    mesh_master: "",
-    mesh_slaves: [],
+    mesh_mode: meshMode,
+    mesh_master: meshMaster,
+    mesh_slaves: meshSlaves,
     bridge_mode_enabled: false,
     online_devices: liveData?.lanDevices?.map((d: any) => ({
       mac: d.macAddress || d.mac || "",
@@ -143,14 +162,23 @@ async function getLiveDataSafe(device: Device): Promise<any> {
   }
 }
 
+async function getMeshContext(device: Device): Promise<MeshContext> {
+  const allDevices = await storage.getDevices();
+  const parent = device.parentDeviceId
+    ? allDevices.find(d => d.id === device.parentDeviceId) || null
+    : null;
+  const slaves = allDevices.filter(d => d.parentDeviceId === device.id);
+  return { parent, slaves };
+}
+
 export function registerFlashmanAPI(app: Express): void {
 
   app.get("/api/v2/device/update/:mac", requireApiKey, async (req: Request, res: Response) => {
     try {
       const device = await findDeviceByMac(req.params.mac) || await findDeviceBySerial(req.params.mac);
       if (!device) return res.status(404).json({ error: "Device not found" });
-      const liveData = await getLiveDataSafe(device);
-      res.json(deviceToFlashmanFormat(device, liveData));
+      const [liveData, meshCtx] = await Promise.all([getLiveDataSafe(device), getMeshContext(device)]);
+      res.json(deviceToFlashmanFormat(device, liveData, meshCtx));
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -290,8 +318,8 @@ export function registerFlashmanAPI(app: Express): void {
     try {
       const device = await findDeviceByMac(req.params.mac);
       if (!device) return res.status(404).json({ success: false, message: "Device not found" });
-      const liveData = await getLiveDataSafe(device);
-      res.json({ success: true, device: deviceToFlashmanFormat(device, liveData) });
+      const [liveData, meshCtx] = await Promise.all([getLiveDataSafe(device), getMeshContext(device)]);
+      res.json({ success: true, device: deviceToFlashmanFormat(device, liveData, meshCtx) });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });
     }
@@ -301,8 +329,8 @@ export function registerFlashmanAPI(app: Express): void {
     try {
       const device = await findDeviceByPppoe(req.params.pppoeUser);
       if (!device) return res.status(404).json({ success: false, message: "Device not found" });
-      const liveData = await getLiveDataSafe(device);
-      res.json({ success: true, device: deviceToFlashmanFormat(device, liveData) });
+      const [liveData, meshCtx] = await Promise.all([getLiveDataSafe(device), getMeshContext(device)]);
+      res.json({ success: true, device: deviceToFlashmanFormat(device, liveData, meshCtx) });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });
     }
@@ -312,8 +340,88 @@ export function registerFlashmanAPI(app: Express): void {
     try {
       const device = await findDeviceBySerial(req.params.serial);
       if (!device) return res.status(404).json({ success: false, message: "Device not found" });
-      const liveData = await getLiveDataSafe(device);
-      res.json({ success: true, device: deviceToFlashmanFormat(device, liveData) });
+      const [liveData, meshCtx] = await Promise.all([getLiveDataSafe(device), getMeshContext(device)]);
+      res.json({ success: true, device: deviceToFlashmanFormat(device, liveData, meshCtx) });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
+  // Dedicated mesh topology endpoint for Link-Watcher-Pro
+  // GET /api/v3/mesh/topology — full list of mesh relationships
+  // GET /api/v3/mesh/slaves/:masterSerial — slaves of a specific master (ONT/router)
+  app.get("/api/v3/mesh/topology", requireApiKey, async (req: Request, res: Response) => {
+    try {
+      const allDevices = await storage.getDevices();
+      const meshDevices = allDevices.filter(d => d.deviceType === "mesh" && d.parentDeviceId);
+
+      const topology = meshDevices.map(slave => {
+        const parent = allDevices.find(d => d.id === slave.parentDeviceId);
+        return {
+          slave: {
+            serial: slave.serialNumber,
+            mac: slave.macAddress || "",
+            model: slave.model || "",
+            manufacturer: slave.manufacturer || "",
+            status: slave.status,
+            ip: slave.ipAddress || "",
+            last_contact: slave.lastSeen ? new Date(slave.lastSeen).toISOString() : null,
+          },
+          master: parent ? {
+            serial: parent.serialNumber,
+            mac: parent.macAddress || "",
+            model: parent.model || "",
+            manufacturer: parent.manufacturer || "",
+            status: parent.status,
+            ip: parent.ipAddress || "",
+            pppoe_user: parent.pppoeUser || "",
+            gpon_serial: parent.gponSerial || "",
+          } : null,
+        };
+      });
+
+      res.json({
+        success: true,
+        total: topology.length,
+        linked: topology.filter(t => t.master).length,
+        unlinked: topology.filter(t => !t.master).length,
+        topology,
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
+  app.get("/api/v3/mesh/slaves/:masterSerial", requireApiKey, async (req: Request, res: Response) => {
+    try {
+      const master = await findDeviceBySerial(req.params.masterSerial) || await findDeviceByMac(req.params.masterSerial);
+      if (!master) return res.status(404).json({ success: false, message: "Master device not found" });
+
+      const allDevices = await storage.getDevices();
+      const slaves = allDevices.filter(d => d.parentDeviceId === master.id);
+
+      res.json({
+        success: true,
+        master: {
+          serial: master.serialNumber,
+          mac: master.macAddress || "",
+          model: master.model || "",
+          status: master.status,
+          ip: master.ipAddress || "",
+          pppoe_user: master.pppoeUser || "",
+          gpon_serial: master.gponSerial || "",
+        },
+        slaves: slaves.map(s => ({
+          serial: s.serialNumber,
+          mac: s.macAddress || "",
+          model: s.model || "",
+          manufacturer: s.manufacturer || "",
+          status: s.status,
+          ip: s.ipAddress || "",
+          last_contact: s.lastSeen ? new Date(s.lastSeen).toISOString() : null,
+        })),
+        total_slaves: slaves.length,
+      });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });
     }
