@@ -118,8 +118,20 @@ function faultIcon(code: string) {
   return <AlertCircle className="w-4 h-4 text-red-500" />;
 }
 
+function parseGenieId(genieId: string): { oui: string; model: string; serial: string } {
+  const parts = genieId.split("-");
+  if (parts.length >= 3) {
+    const oui = parts[0];
+    const serial = parts[parts.length - 1];
+    const model = decodeURIComponent(parts.slice(1, -1).join("-"));
+    return { oui, model, serial };
+  }
+  return { oui: "", model: genieId, serial: "" };
+}
+
 function FaultCard({ fault, onClear }: { fault: AcsFault; onClear: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const parsed = fault.device === null ? parseGenieId(fault.genieDeviceId) : null;
   return (
     <Card data-testid={`card-fault-${fault.id}`} className="overflow-hidden">
       <CardContent className="p-4">
@@ -134,6 +146,12 @@ function FaultCard({ fault, onClear }: { fault: AcsFault; onClear: (id: string) 
                 {fault.label}
               </Badge>
               <code className="text-[10px] text-muted-foreground bg-muted px-1 rounded">{fault.code}</code>
+              {fault.device === null && (
+                <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                  <AlertTriangle className="w-2.5 h-2.5" />
+                  Não cadastrado
+                </Badge>
+              )}
               <span className="text-[10px] text-muted-foreground ml-auto">{formatBRT(fault.timestamp)}</span>
             </div>
 
@@ -153,7 +171,21 @@ function FaultCard({ fault, onClear }: { fault: AcsFault; onClear: (id: string) 
                 )}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground mb-1 font-mono">{fault.genieDeviceId}</p>
+              <div className="flex items-center gap-2 text-sm mb-1">
+                <span className="font-medium text-amber-600 dark:text-amber-400">{parsed?.model}</span>
+                {parsed?.serial && (
+                  <>
+                    <span className="text-muted-foreground text-xs">·</span>
+                    <code className="text-[10px] text-muted-foreground bg-muted px-1 rounded">{parsed.serial}</code>
+                  </>
+                )}
+                {parsed?.oui && (
+                  <>
+                    <span className="text-muted-foreground text-xs">·</span>
+                    <span className="text-[10px] text-muted-foreground">OUI: {parsed.oui}</span>
+                  </>
+                )}
+              </div>
             )}
 
             <p className="text-xs text-muted-foreground">{fault.description}</p>
@@ -260,6 +292,7 @@ export default function Diagnostics() {
   const [filterSeverity, setFilterSeverity] = useState<string>("all");
   const [faultSearch, setFaultSearch] = useState("");
   const [faultCode, setFaultCode] = useState<string>("all");
+  const [faultUnregisteredOnly, setFaultUnregisteredOnly] = useState(false);
   const [offlineTypeFilter, setOfflineTypeFilter] = useState<string>("all");
 
   const { data: logs, isLoading: logsLoading } = useQuery<DeviceLog[]>({
@@ -311,14 +344,17 @@ export default function Diagnostics() {
 
   const filteredFaults = faultsData?.faults.filter(f => {
     const matchesCode = faultCode === "all" || f.code === faultCode;
+    const matchesUnregistered = !faultUnregisteredOnly || f.device === null;
     const q = faultSearch.toLowerCase();
     const matchesSearch = !q || f.genieDeviceId.toLowerCase().includes(q)
       || (f.device?.serial ?? "").toLowerCase().includes(q)
       || (f.device?.model ?? "").toLowerCase().includes(q)
       || (f.device?.pppoeUser ?? "").toLowerCase().includes(q)
       || f.label.toLowerCase().includes(q);
-    return matchesCode && matchesSearch;
+    return matchesCode && matchesUnregistered && matchesSearch;
   });
+
+  const unregisteredFaultCount = faultsData?.faults.filter(f => f.device === null).length ?? 0;
 
   const faultCodes = Array.from(new Set(faultsData?.faults.map(f => f.code) ?? [])).sort();
   const faultCodeCounts = faultCodes.reduce((acc, code) => {
@@ -445,6 +481,15 @@ export default function Diagnostics() {
                         <Badge variant="secondary" className="text-[9px] h-4 px-1">{faultCodeCounts[code]}</Badge>
                       </button>
                     ))}
+                    <button
+                      onClick={() => setFaultUnregisteredOnly(!faultUnregisteredOnly)}
+                      data-testid="button-fault-unregistered"
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors ${faultUnregisteredOnly ? "bg-amber-500 text-white border-amber-500" : "bg-background hover:bg-muted border-border"}`}
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>Não cadastrado</span>
+                      <Badge variant={faultUnregisteredOnly ? "secondary" : "outline"} className="text-[9px] h-4 px-1">{unregisteredFaultCount}</Badge>
+                    </button>
                   </div>
                 )}
 
