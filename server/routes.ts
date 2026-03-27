@@ -1553,7 +1553,11 @@ export async function registerRoutes(
   // ACS Diagnostics: offline devices analysis
   app.get("/api/acs/offline", async (_req, res) => {
     try {
-      const allDevices = await storage.getDevices();
+      const [allDevices, faults] = await Promise.all([
+        storage.getDevices(),
+        genieGetAllFaults().catch(() => [] as Awaited<ReturnType<typeof genieGetAllFaults>>),
+      ]);
+      const faultedGenieIds = new Set(faults.map(f => f.device));
       const now = Date.now();
       const h2 = 2 * 60 * 60 * 1000;
       const h24 = 24 * 60 * 60 * 1000;
@@ -1579,11 +1583,13 @@ export async function registerRoutes(
         serial: d.serialNumber,
         model: d.model,
         manufacturer: d.manufacturer,
+        deviceType: d.deviceType,
         pppoeUser: d.pppoeUser,
         ipAddress: d.ipAddress,
         status: d.status,
         lastSeen: d.lastSeen,
         genieId: d.genieId,
+        hasFault: d.genieId ? faultedGenieIds.has(d.genieId) : false,
       }));
 
       res.json({

@@ -73,11 +73,13 @@ interface OfflineDevice {
   serial: string;
   model: string;
   manufacturer: string;
+  deviceType: string;
   pppoeUser: string | null;
   ipAddress: string | null;
   status: string;
   lastSeen: string | null;
   genieId: string | null;
+  hasFault: boolean;
 }
 
 interface OfflineResponse {
@@ -192,39 +194,57 @@ function FaultCard({ fault, onClear }: { fault: AcsFault; onClear: (id: string) 
   );
 }
 
-function OfflineTable({ devices, label, icon, color }: {
+const DEVICE_TYPE_LABELS: Record<string, string> = {
+  ont: "ONT",
+  router: "Roteador",
+  mesh: "Mesh",
+  switch: "Switch",
+};
+
+function OfflineTable({ devices, label, icon, color, typeFilter }: {
   devices: OfflineDevice[];
   label: string;
   icon: React.ReactNode;
   color: string;
+  typeFilter: string;
 }) {
-  if (devices.length === 0) return null;
+  const filtered = typeFilter === "all" ? devices : devices.filter(d => d.deviceType === typeFilter);
+  if (filtered.length === 0) return null;
   return (
     <div className="space-y-2">
       <div className={`flex items-center gap-2 text-sm font-semibold ${color}`}>
         {icon}
-        {label} ({devices.length})
+        {label} ({filtered.length}{typeFilter !== "all" ? ` de ${devices.length}` : ""})
       </div>
       <div className="space-y-1">
-        {devices.map(d => (
+        {filtered.map(d => (
           <Card key={d.id} data-testid={`card-offline-${d.serial}`}>
             <CardContent className="p-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">
+                    {DEVICE_TYPE_LABELS[d.deviceType] ?? d.deviceType}
+                  </Badge>
                   <Link href={`/devices/${d.id}`} className="text-sm font-medium text-primary hover:underline flex items-center gap-1" data-testid={`link-offline-device-${d.serial}`}>
                     {d.manufacturer} {d.model}
                     <ExternalLink className="w-3 h-3" />
                   </Link>
                   <code className="text-[10px] text-muted-foreground bg-muted px-1 rounded">{d.serial}</code>
                   {d.pppoeUser && <span className="text-xs text-muted-foreground">{d.pppoeUser}</span>}
-                  {d.ipAddress && <span className="text-xs text-muted-foreground">{d.ipAddress}</span>}
+                  {d.ipAddress && <span className="text-xs text-muted-foreground font-mono">{d.ipAddress}</span>}
                 </div>
               </div>
-              <div className="text-right shrink-0">
-                <span className="text-xs text-muted-foreground">{timeAgo(d.lastSeen)}</span>
-                {!d.genieId && (
-                  <Badge variant="outline" className="text-[9px] ml-2">Sem ACS</Badge>
+              <div className="flex items-center gap-2 shrink-0">
+                {d.hasFault && (
+                  <Badge variant="destructive" className="text-[9px] px-1.5 py-0.5 flex items-center gap-0.5">
+                    <AlertCircle className="w-2.5 h-2.5" />
+                    Fault
+                  </Badge>
                 )}
+                {!d.genieId && (
+                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0.5">Sem ACS</Badge>
+                )}
+                <span className="text-xs text-muted-foreground">{timeAgo(d.lastSeen)}</span>
               </div>
             </CardContent>
           </Card>
@@ -240,6 +260,7 @@ export default function Diagnostics() {
   const [filterSeverity, setFilterSeverity] = useState<string>("all");
   const [faultSearch, setFaultSearch] = useState("");
   const [faultCode, setFaultCode] = useState<string>("all");
+  const [offlineTypeFilter, setOfflineTypeFilter] = useState<string>("all");
 
   const { data: logs, isLoading: logsLoading } = useQuery<DeviceLog[]>({
     queryKey: ["/api/device-logs"],
@@ -494,10 +515,33 @@ export default function Diagnostics() {
                   ))}
                 </div>
 
-                <div className="flex justify-end">
-                  <Button variant="outline" size="sm" onClick={() => refetchOffline()} data-testid="button-refresh-offline">
-                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Atualizar
-                  </Button>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {(["all", "ont", "router", "mesh"] as const).map(t => {
+                    const allItems = [
+                      ...(offlineData?.stale ?? []),
+                      ...(offlineData?.offline ?? []),
+                      ...(offlineData?.dead ?? []),
+                      ...(offlineData?.neverSeen ?? []),
+                    ];
+                    const count = t === "all" ? allItems.length : allItems.filter(d => d.deviceType === t).length;
+                    if (t !== "all" && count === 0) return null;
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => setOfflineTypeFilter(t)}
+                        data-testid={`button-offline-type-${t}`}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors ${offlineTypeFilter === t ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted border-border"}`}
+                      >
+                        {t === "all" ? "Todos" : DEVICE_TYPE_LABELS[t] ?? t}
+                        <Badge variant={offlineTypeFilter === t ? "secondary" : "outline"} className="text-[9px] h-4 px-1">{count}</Badge>
+                      </button>
+                    );
+                  })}
+                  <div className="ml-auto">
+                    <Button variant="outline" size="sm" onClick={() => refetchOffline()} data-testid="button-refresh-offline">
+                      <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Atualizar
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="space-y-6">
@@ -506,24 +550,28 @@ export default function Diagnostics() {
                     label="Instáveis (sem contato há 2-24h)"
                     icon={<Clock className="w-4 h-4" />}
                     color="text-amber-500"
+                    typeFilter={offlineTypeFilter}
                   />
                   <OfflineTable
                     devices={offlineData?.offline ?? []}
                     label="Offline (sem contato há 1-7 dias)"
                     icon={<WifiOff className="w-4 h-4" />}
                     color="text-orange-500"
+                    typeFilter={offlineTypeFilter}
                   />
                   <OfflineTable
                     devices={offlineData?.dead ?? []}
                     label="Inativos (sem contato há mais de 7 dias)"
                     icon={<Skull className="w-4 h-4" />}
                     color="text-red-500"
+                    typeFilter={offlineTypeFilter}
                   />
                   <OfflineTable
                     devices={offlineData?.neverSeen ?? []}
                     label="Nunca responderam ao ACS"
                     icon={<AlertCircle className="w-4 h-4" />}
                     color="text-muted-foreground"
+                    typeFilter={offlineTypeFilter}
                   />
                   {(offlineData?.summary.stale ?? 0) === 0 &&
                    (offlineData?.summary.offline ?? 0) === 0 &&
