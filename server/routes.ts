@@ -31,6 +31,8 @@ import {
   genieCheckConnectivity,
   genieClearDeviceFaults,
   genieClearAllFaults,
+  genieGetAllFaults,
+  genieDeleteFault,
   GenieACSError,
 } from "./genieacs";
 import { setupGenieACS, getGenieACSSetupStatus } from "./genieacs-setup";
@@ -1478,6 +1480,129 @@ export async function registerRoutes(
       res.json({ message: `${deleted} faults removidos`, deleted });
     } catch (error) {
       handleGenieError(error, res);
+    }
+  });
+
+  // ACS Diagnostics: faults enriched with device info
+  app.get("/api/acs/faults", async (_req, res) => {
+    try {
+      const [faults, allDevices] = await Promise.all([
+        genieGetAllFaults(),
+        storage.getDevices(),
+      ]);
+      const byGenieId = new Map(allDevices.filter(d => d.genieId).map(d => [d.genieId!, d]));
+      const FAULT_LABELS: Record<string, { label: string; description: string; severity: string }> = {
+        "cwmp.9806": { label: "Valor Inválido", description: "O dispositivo rejeitou a escrita de um parâmetro (SetParameterValues). Pode indicar incompatibilidade de firmware ou parâmetro somente-leitura.", severity: "warning" },
+        "cwmp.9805": { label: "Parâmetro Desconhecido", description: "O parâmetro solicitado não existe no dispositivo. Geralmente causado por diferença de modelo ou versão de firmware.", severity: "info" },
+        "cwmp.9800": { label: "Erro Interno CWMP", description: "Erro genérico retornado pelo dispositivo durante a sessão TR-069.", severity: "error" },
+        "ext.Error": { label: "Erro de Script (ext)", description: "O script de provisão tentou chamar uma extensão GenieACS não instalada (módulo ext).", severity: "error" },
+        "script.Error": { label: "Erro de Script", description: "Erro de JavaScript dentro do script de provisão. Verifique o provision no GenieACS.", severity: "error" },
+        "session_terminated": { label: "Sessão Encerrada", description: "A sessão CWMP foi encerrada abruptamente. Pode indicar queda de conexão ou reinicialização do dispositivo.", severity: "warning" },
+        "too_many_commits": { label: "Muitos Commits", description: "O script de provisão tentou escrever parâmetros demais em uma única sessão. Otimize o provision.", severity: "warning" },
+      };
+      const enriched = faults.map(f => {
+        const device = byGenieId.get(f.device);
+        const meta = FAULT_LABELS[f.code] ?? { label: f.code, description: f.message || "Sem descrição", severity: "error" };
+        return {
+          id: f._id,
+          genieDeviceId: f.device,
+          channel: f.channel,
+          timestamp: f.timestamp,
+          code: f.code,
+          retries: f.retries,
+          label: meta.label,
+          description: meta.description,
+          severity: meta.severity,
+          device: device ? {
+            id: device.id,
+            serial: device.serialNumber,
+            model: device.model,
+            manufacturer: device.manufacturer,
+            pppoeUser: device.pppoeUser,
+            status: device.status,
+            ipAddress: device.ipAddress,
+          } : null,
+        };
+      });
+      enriched.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      res.json({ total: enriched.length, faults: enriched });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.delete("/api/acs/faults/:id", async (req, res) => {
+    try {
+      const ok = await genieDeleteFault(req.params.id);
+      res.json({ success: ok });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  app.delete("/api/acs/faults", async (req, res) => {
+    try {
+      const code = req.query.code as string | undefined;
+      const deleted = await genieClearAllFaults(code);
+      res.json({ deleted });
+    } catch (error) {
+      handleGenieError(error, res);
+    }
+  });
+
+  // ACS Diagnostics: offline devices analysis
+  app.get("/api/acs/offline", async (_req, res) => {
+    try {
+      const allDevices = await storage.getDevices();
+      const now = Date.now();
+      const h2 = 2 * 60 * 60 * 1000;
+      const h24 = 24 * 60 * 60 * 1000;
+      const d7 = 7 * h24;
+
+      const online: typeof allDevices = [];
+      const stale: typeof allDevices = [];
+      const offline: typeof allDevices = [];
+      const dead: typeof allDevices = [];
+      const neverSeen: typeof allDevices = [];
+
+      for (const d of allDevices) {
+        if (!d.lastSeen) { neverSeen.push(d); continue; }
+        const ago = now - new Date(d.lastSeen).getTime();
+        if (ago < h2) online.push(d);
+        else if (ago < h24) stale.push(d);
+        else if (ago < d7) offline.push(d);
+        else dead.push(d);
+      }
+
+      const fmt = (devices: typeof allDevices) => devices.map(d => ({
+        id: d.id,
+        serial: d.serialNumber,
+        model: d.model,
+        manufacturer: d.manufacturer,
+        pppoeUser: d.pppoeUser,
+        ipAddress: d.ipAddress,
+        status: d.status,
+        lastSeen: d.lastSeen,
+        genieId: d.genieId,
+      }));
+
+      res.json({
+        summary: {
+          total: allDevices.length,
+          online: online.length,
+          stale: stale.length,
+          offline: offline.length,
+          dead: dead.length,
+          neverSeen: neverSeen.length,
+        },
+        stale: fmt(stale),
+        offline: fmt(offline),
+        dead: fmt(dead),
+        neverSeen: fmt(neverSeen),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
+      res.status(500).json({ message });
     }
   });
 

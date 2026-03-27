@@ -261,6 +261,30 @@ export async function genieClearAllFaults(code?: string): Promise<number> {
   return deleted;
 }
 
+export interface GenieFault {
+  _id: string;
+  device: string;
+  channel: string;
+  timestamp: string;
+  code: string;
+  message: string;
+  detail?: Record<string, unknown>;
+  retries: number;
+  provisions?: string;
+}
+
+export async function genieGetAllFaults(): Promise<GenieFault[]> {
+  const url = `${GENIEACS_NBI_URL}/faults/`;
+  const res = await genieFetch(url, { method: "GET" });
+  if (!res.ok) return [];
+  return res.json() as Promise<GenieFault[]>;
+}
+
+export async function genieDeleteFault(faultId: string): Promise<boolean> {
+  const res = await genieFetch(`${GENIEACS_NBI_URL}/faults/${encodeURIComponent(faultId)}`, { method: "DELETE" });
+  return res.ok;
+}
+
 async function isDeviceTR181(deviceId: string): Promise<boolean> {
   const device = await genieGetDevice(deviceId);
   if (!device) return false;
